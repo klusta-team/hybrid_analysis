@@ -1,0 +1,455 @@
+
+
+
+% Header, overrides base
+
+    % Make sure that the sphinx doc style knows who it inherits from.
+    \def\sphinxdocclass{article}
+
+    % Declare the document class
+    \documentclass[letterpaper,10pt,english]{/usr/local/lib/python2.7/dist-packages/Sphinx-1.2b3-py2.7.egg/sphinx/texinputs/sphinxhowto}
+
+    % Imports
+    \usepackage[utf8]{inputenc}
+    \DeclareUnicodeCharacter{00A0}{\\nobreakspace}
+    \usepackage[T1]{fontenc}
+    \usepackage{babel}
+    \usepackage{times}
+    \usepackage{import}
+    \usepackage[Bjarne]{/usr/local/lib/python2.7/dist-packages/Sphinx-1.2b3-py2.7.egg/sphinx/texinputs/fncychap}
+    \usepackage{longtable}
+    \usepackage{/usr/local/lib/python2.7/dist-packages/Sphinx-1.2b3-py2.7.egg/sphinx/texinputs/sphinx}
+    \usepackage{multirow}
+
+    \usepackage{amsmath}
+    \usepackage{amssymb}
+    \usepackage{ucs}
+    \usepackage{enumerate}
+
+    % Used to make the Input/Output rules follow around the contents.
+    \usepackage{needspace}
+
+    % Pygments requirements
+    \usepackage{fancyvrb}
+    \usepackage{color}
+    % ansi colors additions
+    \definecolor{darkgreen}{rgb}{.12,.54,.11}
+    \definecolor{lightgray}{gray}{.95}
+    \definecolor{brown}{rgb}{0.54,0.27,0.07}
+    \definecolor{purple}{rgb}{0.5,0.0,0.5}
+    \definecolor{darkgray}{gray}{0.25}
+    \definecolor{lightred}{rgb}{1.0,0.39,0.28}
+    \definecolor{lightgreen}{rgb}{0.48,0.99,0.0}
+    \definecolor{lightblue}{rgb}{0.53,0.81,0.92}
+    \definecolor{lightpurple}{rgb}{0.87,0.63,0.87}
+    \definecolor{lightcyan}{rgb}{0.5,1.0,0.83}
+
+    % Needed to box output/input
+    \usepackage{tikz}
+        \usetikzlibrary{calc,arrows,shadows}
+    \usepackage[framemethod=tikz]{mdframed}
+
+    \usepackage{alltt}
+
+    % Used to load and display graphics
+    \usepackage{graphicx}
+    \graphicspath{ {figs/} }
+    \usepackage[Export]{adjustbox} % To resize
+
+    % used so that images for notebooks which have spaces in the name can still be included
+    \usepackage{grffile}
+
+
+    % For formatting output while also word wrapping.
+    \usepackage{listings}
+    \lstset{breaklines=true}
+    \lstset{basicstyle=\small\ttfamily}
+    \def\smaller{\fontsize{9.5pt}{9.5pt}\selectfont}
+
+    %Pygments definitions
+    
+\makeatletter
+\def\PY@reset{\let\PY@it=\relax \let\PY@bf=\relax%
+    \let\PY@ul=\relax \let\PY@tc=\relax%
+    \let\PY@bc=\relax \let\PY@ff=\relax}
+\def\PY@tok#1{\csname PY@tok@#1\endcsname}
+\def\PY@toks#1+{\ifx\relax#1\empty\else%
+    \PY@tok{#1}\expandafter\PY@toks\fi}
+\def\PY@do#1{\PY@bc{\PY@tc{\PY@ul{%
+    \PY@it{\PY@bf{\PY@ff{#1}}}}}}}
+\def\PY#1#2{\PY@reset\PY@toks#1+\relax+\PY@do{#2}}
+
+\expandafter\def\csname PY@tok@gd\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.63,0.00,0.00}{##1}}}
+\expandafter\def\csname PY@tok@gu\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.50,0.00,0.50}{##1}}}
+\expandafter\def\csname PY@tok@gt\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.00,0.25,0.82}{##1}}}
+\expandafter\def\csname PY@tok@gs\endcsname{\let\PY@bf=\textbf}
+\expandafter\def\csname PY@tok@gr\endcsname{\def\PY@tc##1{\textcolor[rgb]{1.00,0.00,0.00}{##1}}}
+\expandafter\def\csname PY@tok@cm\endcsname{\let\PY@it=\textit\def\PY@tc##1{\textcolor[rgb]{0.25,0.50,0.50}{##1}}}
+\expandafter\def\csname PY@tok@vg\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.10,0.09,0.49}{##1}}}
+\expandafter\def\csname PY@tok@m\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.40,0.40,0.40}{##1}}}
+\expandafter\def\csname PY@tok@mh\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.40,0.40,0.40}{##1}}}
+\expandafter\def\csname PY@tok@go\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.50,0.50,0.50}{##1}}}
+\expandafter\def\csname PY@tok@ge\endcsname{\let\PY@it=\textit}
+\expandafter\def\csname PY@tok@vc\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.10,0.09,0.49}{##1}}}
+\expandafter\def\csname PY@tok@il\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.40,0.40,0.40}{##1}}}
+\expandafter\def\csname PY@tok@cs\endcsname{\let\PY@it=\textit\def\PY@tc##1{\textcolor[rgb]{0.25,0.50,0.50}{##1}}}
+\expandafter\def\csname PY@tok@cp\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.74,0.48,0.00}{##1}}}
+\expandafter\def\csname PY@tok@gi\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.00,0.63,0.00}{##1}}}
+\expandafter\def\csname PY@tok@gh\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.00,0.50}{##1}}}
+\expandafter\def\csname PY@tok@ni\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.60,0.60,0.60}{##1}}}
+\expandafter\def\csname PY@tok@nl\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.63,0.63,0.00}{##1}}}
+\expandafter\def\csname PY@tok@nn\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.00,1.00}{##1}}}
+\expandafter\def\csname PY@tok@no\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.53,0.00,0.00}{##1}}}
+\expandafter\def\csname PY@tok@na\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.49,0.56,0.16}{##1}}}
+\expandafter\def\csname PY@tok@nb\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@nc\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.00,1.00}{##1}}}
+\expandafter\def\csname PY@tok@nd\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.67,0.13,1.00}{##1}}}
+\expandafter\def\csname PY@tok@ne\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.82,0.25,0.23}{##1}}}
+\expandafter\def\csname PY@tok@nf\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.00,0.00,1.00}{##1}}}
+\expandafter\def\csname PY@tok@si\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.73,0.40,0.53}{##1}}}
+\expandafter\def\csname PY@tok@s2\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.13,0.13}{##1}}}
+\expandafter\def\csname PY@tok@vi\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.10,0.09,0.49}{##1}}}
+\expandafter\def\csname PY@tok@nt\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@nv\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.10,0.09,0.49}{##1}}}
+\expandafter\def\csname PY@tok@s1\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.13,0.13}{##1}}}
+\expandafter\def\csname PY@tok@sh\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.13,0.13}{##1}}}
+\expandafter\def\csname PY@tok@sc\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.13,0.13}{##1}}}
+\expandafter\def\csname PY@tok@sx\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@bp\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@c1\endcsname{\let\PY@it=\textit\def\PY@tc##1{\textcolor[rgb]{0.25,0.50,0.50}{##1}}}
+\expandafter\def\csname PY@tok@kc\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@c\endcsname{\let\PY@it=\textit\def\PY@tc##1{\textcolor[rgb]{0.25,0.50,0.50}{##1}}}
+\expandafter\def\csname PY@tok@mf\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.40,0.40,0.40}{##1}}}
+\expandafter\def\csname PY@tok@err\endcsname{\def\PY@bc##1{\setlength{\fboxsep}{0pt}\fcolorbox[rgb]{1.00,0.00,0.00}{1,1,1}{\strut ##1}}}
+\expandafter\def\csname PY@tok@kd\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@ss\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.10,0.09,0.49}{##1}}}
+\expandafter\def\csname PY@tok@sr\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.40,0.53}{##1}}}
+\expandafter\def\csname PY@tok@mo\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.40,0.40,0.40}{##1}}}
+\expandafter\def\csname PY@tok@kn\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@mi\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.40,0.40,0.40}{##1}}}
+\expandafter\def\csname PY@tok@gp\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.00,0.50}{##1}}}
+\expandafter\def\csname PY@tok@o\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.40,0.40,0.40}{##1}}}
+\expandafter\def\csname PY@tok@kr\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@s\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.13,0.13}{##1}}}
+\expandafter\def\csname PY@tok@kp\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@w\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.73,0.73}{##1}}}
+\expandafter\def\csname PY@tok@kt\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.69,0.00,0.25}{##1}}}
+\expandafter\def\csname PY@tok@ow\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.67,0.13,1.00}{##1}}}
+\expandafter\def\csname PY@tok@sb\endcsname{\def\PY@tc##1{\textcolor[rgb]{0.73,0.13,0.13}{##1}}}
+\expandafter\def\csname PY@tok@k\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.00,0.50,0.00}{##1}}}
+\expandafter\def\csname PY@tok@se\endcsname{\let\PY@bf=\textbf\def\PY@tc##1{\textcolor[rgb]{0.73,0.40,0.13}{##1}}}
+\expandafter\def\csname PY@tok@sd\endcsname{\let\PY@it=\textit\def\PY@tc##1{\textcolor[rgb]{0.73,0.13,0.13}{##1}}}
+
+\def\PYZbs{\char`\\}
+\def\PYZus{\char`\_}
+\def\PYZob{\char`\{}
+\def\PYZcb{\char`\}}
+\def\PYZca{\char`\^}
+\def\PYZam{\char`\&}
+\def\PYZlt{\char`\<}
+\def\PYZgt{\char`\>}
+\def\PYZsh{\char`\#}
+\def\PYZpc{\char`\%}
+\def\PYZdl{\char`\$}
+\def\PYZti{\char`\~}
+% for compatibility with earlier versions
+\def\PYZat{@}
+\def\PYZlb{[}
+\def\PYZrb{]}
+\makeatother
+
+
+    %Set pygments styles if needed...
+    
+        \definecolor{nbframe-border}{rgb}{0.867,0.867,0.867}
+        \definecolor{nbframe-bg}{rgb}{0.969,0.969,0.969}
+        \definecolor{nbframe-in-prompt}{rgb}{0.0,0.0,0.502}
+        \definecolor{nbframe-out-prompt}{rgb}{0.545,0.0,0.0}
+
+        \newenvironment{ColorVerbatim}
+        {\begin{mdframed}[%
+            roundcorner=1.0pt, %
+            backgroundcolor=nbframe-bg, %
+            userdefinedwidth=1\linewidth, %
+            leftmargin=0.1\linewidth, %
+            innerleftmargin=0pt, %
+            innerrightmargin=0pt, %
+            linecolor=nbframe-border, %
+            linewidth=1pt, %
+            usetwoside=false, %
+            everyline=true, %
+            innerlinewidth=3pt, %
+            innerlinecolor=nbframe-bg, %
+            middlelinewidth=1pt, %
+            middlelinecolor=nbframe-bg, %
+            outerlinewidth=0.5pt, %
+            outerlinecolor=nbframe-border, %
+            needspace=0pt
+        ]}
+        {\end{mdframed}}
+        
+        \newenvironment{InvisibleVerbatim}
+        {\begin{mdframed}[leftmargin=0.1\linewidth,innerleftmargin=3pt,innerrightmargin=3pt, userdefinedwidth=1\linewidth, linewidth=0pt, linecolor=white, usetwoside=false]}
+        {\end{mdframed}}
+
+        \renewenvironment{Verbatim}[1][\unskip]
+        {\begin{alltt}\smaller}
+        {\end{alltt}}
+    
+
+    % Help prevent overflowing lines due to urls and other hard-to-break 
+    % entities.  This doesn't catch everything...
+    \sloppy
+
+    % Document level variables
+    \title{Overview}
+    \date{November 22, 2013}
+    \release{}
+    \author{Unknown Author}
+    \renewcommand{\releasename}{}
+
+    % TODO: Add option for the user to specify a logo for his/her export.
+    \newcommand{\sphinxlogo}{}
+
+    % Make the index page of the document.
+    \makeindex
+
+    % Import sphinx document type specifics.
+     
+
+
+% Body
+
+    % Start of the document
+    \begin{document}
+
+        
+            \maketitle
+        
+
+        
+
+
+        
+        \section{Important Preliminaries:}
+
+1). The .kwik format has to be modified so that it can store more than
+one clustering.
+
+2). Which hashing algorithm? Something from
+\href{http://docs.python.org/2/library/hashlib.html}{http://docs.python.org/2/library/hashlib.html}.
+We obviously don't need cryptography.
+
+\section{Original data files}
+
+There is a folder consisting of the three recordings (.dat files) of
+Mariano Belluscio. One .dat file has been clustered
+(\texttt{n6mab031109.dat}), with method \texttt{MKKdistfloat} and has a
+number of nice clusters out of which we can choose a few suitable donor
+cells. There are two other recordings \texttt{n6mab041109.dat} and
+\texttt{n6mab061109.dat}; these will act as ``acceptor'' datasets.
+
+\section{Hybrid dataset creation}
+
+Minimal information necessary for defining a hybrid dataset is a 4-tuple
+of the form: \texttt{(acceptor, donor\_id, amplitude, time\_series)},
+where \texttt{acceptor} is the dataset which receives spikes from
+another analogously recorded dataset \texttt{donor} at the times
+specified by \texttt{time\_series}. Each element of the 4-tuple may be
+generated by a range of other parameters, e.g.
+
+\begin{enumerate}[1)]
+\item
+  A rate, \texttt{r} could define a \texttt{time\_series} consisting of
+  regular spiking at \texttt{r} Hz. This could be created by a function:
+
+  def: create\_regular\_resfile(rate, sampling\_rate, starttime,
+  endtime, resname): `''Creates a regular .res file with firing rate r
+  Hz samples'''
+\item
+  The donor\_id could be derived from information, e.g.~the 3-tuple
+  (donor,donorcluid,donorcluster) pertaining to the donor dataset
+  (donor), the detection method and clustering algorithm (donorcluid)
+  and cluster (donorcluster) number of the cell that is added to the
+  acceptor dataset.
+
+  def: create\_donor\_id(donor,donorcluid,donorcluster): '''Outputs
+  donor identity files:
+
+  donor\_id = donor\_donorcluid\_donorcluster, (which typically looks
+  like: n6mab031109\_MKKdistfloat\_54`).
+
+  meanspike\_file\_id = a file called donor\_id.msua.1.
+
+  meanmask\_file = a file called donor\_id.amsk.1.`''
+\end{enumerate}
+
+We can have a folder containing donor\_ids, or a list of 3-tuples
+generating to donor\_ids.
+
+We can create a hybrid dataset
+\texttt{D(acceptor, donor\_id, amplitude, time\_series)} (which we shall
+abbreviate to \texttt{D} when there is no ambiguity) using the Python
+function:
+
+\begin{verbatim}
+def: create_hybrid_datfile(acceptor, donor_id, amplitude, time_series):
+
+'''This function outputs a raw datafile called, 
+      Hash(D).dat, in the folder Hash(D)'''
+
+def: convert_to_kwik():
+        '''Converts Hash(D).dat to Hash(D).kwd and Hash(D).kwik'''
+\end{verbatim}
+
+, where Hash(var) is the hash produced from the variables \texttt{var}
+via some hash function.
+
+Question: The raw waveform from one recording on non-relevant channels
+could contain wildly inappropriate waveforms. I got around this before
+by only added parts of the wave form corresponding to the .amsk.1 file.
+
+NOTE: \texttt{D} implicitly contains the groundtruth times (equivalent
+to a .res and a .clu file) for the hybrid spike times and hybrid
+clusters.
+
+\section{Running SpikeDetekt with various parameters}
+
+We aim to find the optimal detection strategy, but running spikedetekt
+on Hash(D).dat several times using a variety of parameters,
+\texttt{params}, which we shall denote \texttt{p}, resulting in two
+files in the folder
+
+\texttt{Hash(D)\_Hash(p)}:
+
+\texttt{Hash(D)\_Hash(p).kwx}
+
+\texttt{Hash(D)\_Hash(p).kwik}
+
+The feature and mask vectors, corresponding to the .fet and .fmask files
+are stored in the .kwx file, these will later be required by Masked
+KlustaKwik.
+
+The parameters are stored in a global Python dictionary of variables
+which can be accessed by all modules of SpikeDetekt. The default value
+of these parameters are stored in
+\texttt{spikedetekt/spikedetekt/defaultparameters.py}.
+
+In the first phase we would like to finish testing the effect of varying
+certain parameters on the quality of spike detection and alignment,
+e.g.~testing two-threshold detection by keeping the upper threshold
+constant and varying the lower threshold. We can vary one parameter and
+keep the others constant by specifying custom default parameters in the
+file \texttt{usualparameters.py} . We will specify a 2D detection
+window, \texttt{Sigma} consisting of a minimal time jitter window and a
+threshold of minimal mask similarity measure (\textgreater{}0.8); a
+spike will be denoted as ``successfully detected'' if it lies within
+this detection window. This will be implemented in some Python functions
+in \texttt{evaluate\_detection.py}. This will have two outputs:
+
+\begin{enumerate}[1)]
+\item
+  \texttt{detection\_statistics(D, p,Sigma)} will be a set of scripts
+  which will measure the efficacy of the detection \texttt{p}. e.g.~we
+  could have a function: def: test\_detection\_algorithm(D,p,Sigma):
+  `''Test spike detection algorithm on a hybrid dataset'''
+\item
+  A \texttt{derived groundtruth(D, p,Sigma)} relative to the detection
+  (i.e.~equivalent to a .clu file which is commensurate with the output
+  .res file of detected spikes(those found in the window specified by
+  \texttt{Sigma}, which specifies which spikes are background (in
+  cluster 0) and which are hybrid (in clusters 1, 2, \ldots{}
+  num\_hybrids. This clustering can be stored in
+  Hash(D)\emph{Hash(p)}Sigma.kwik.
+\end{enumerate}
+
+\section{Supervised Learning}
+
+To perform supervised learning in the form of a support vector machine
+(SVM) on the groundtruth obtained after running SpikeDetekt and applying
+detection criterion \texttt{Sigma}, we use the Python machine learning
+package, \texttt{sklearn}. We will run SVM with a different kernels and
+their associated parameters, and a grid of class weights. We shall
+denote these parameters, s. The set of functions
+\texttt{supervised\_learning} should output a set of clusterings from
+which we obtain an ROC curve, providing an upper bound for performance
+of any unsupervised algorithm. This set of clusterings will be stored in
+the file \texttt{(D, p,Sigma,s)}.kwik.
+
+\section{Clustering using Masked KlustaKwik}
+
+Given detection, extraction of features and masking, specified in the
+files \texttt{Hash(D)\_Hash(p).kwx}, we can now run KlustaKwik on the
+.fet and .fmask files obtained from \texttt{Hash(D)\_Hash(p).kwx}. with
+a set of parameters which we shall denote \texttt{k} which will be
+defined a dictionary which will output a bash script for running
+KlustaKwik,
+
+\begin{verbatim}
+def: get_KK_input(D,p,k):
+'''Will output the .fet and .fmask files in a folder, CartesianHash_(D,p,k)'''
+
+def: make_KK_runscripts(D,p,k):
+'''Produces bash scripts pertaining to parameters k that run KlustaKwik on (D,p) '''
+
+def: make_bash_hash(D,p,k):
+'''Outputs the hash of (D,p,k) and the bash script'''
+\end{verbatim}
+
+This will result in a clustering which will be stored in the file
+\texttt{Hash(D)\_Hash(p)\_Hash(k).kwx}. An analysis script can be run on
+\texttt{Hash(D)\_Hash(p)\_Hash(k).kwx} and the associated groundtruth,
+\texttt{Hash(D)\_Hash(p)\_Sigma.kwik} to obtain the confusion matrix.
+This will be stored as a pickle or a textfile
+\texttt{Hash(D)\_Hash(p)\_Hash(k).p}. M\# \#Supercomputer Scripts will
+be required for sending jobs to Legion. These jobs will usually be SVM
+and Masked KlustaKwik.
+
+    % Make sure that atleast 4 lines are below the HR
+    \needspace{4\baselineskip}
+
+    
+        \vspace{6pt}
+        \makebox[0.1\linewidth]{\smaller\hfill\tt\color{nbframe-in-prompt}In\hspace{4pt}{[}{]}:\hspace{4pt}}\\*
+        \vspace{-2.65\baselineskip}
+        \begin{ColorVerbatim}
+            \vspace{-0.7\baselineskip}
+            \begin{Verbatim}[commandchars=\\\{\}]
+
+\end{Verbatim}
+
+            
+                \vspace{-0.2\baselineskip}
+            
+        \end{ColorVerbatim}
+    
+
+
+    % Make sure that atleast 4 lines are below the HR
+    \needspace{4\baselineskip}
+
+    
+        \vspace{6pt}
+        \makebox[0.1\linewidth]{\smaller\hfill\tt\color{nbframe-in-prompt}In\hspace{4pt}{[}{]}:\hspace{4pt}}\\*
+        \vspace{-2.65\baselineskip}
+        \begin{ColorVerbatim}
+            \vspace{-0.7\baselineskip}
+            \begin{Verbatim}[commandchars=\\\{\}]
+
+\end{Verbatim}
+
+            
+                \vspace{0.3\baselineskip}
+            
+        \end{ColorVerbatim}
+    
+
+        
+
+        \renewcommand{\indexname}{Index}
+        \printindex
+
+    % End of document
+    \end{document}
+
+
