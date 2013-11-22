@@ -1,4 +1,4 @@
-hybrid_analysis
-===============
+Hybrid analysis for spike sorting
+=================================
 
-To view IPython notebook files you can use [http://nbviewer.ipython.org/](http://nbviewer.ipython.org/).
+* [Overview of the system](http://nbviewer.ipython.org/urls/raw.github.com/klusta-team/hybrid_analysis/master/notes/Overview.ipynb)
