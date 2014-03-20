@@ -13,10 +13,105 @@ import runspikedetekt_lib as rsd
 import detection_statistics as ds
 #from spikedetekt2.dataio import Experiment
 from spikedetekt2 import *
+from xml.etree.ElementTree import ElementTree,Element,SubElement
 
 #write_mask(M, basename+'.fmask.'+str(shank), fmt='%f')
 
+#def write_spk_buffered(table, column, filepath, indices,
+#                       channels=slice(None), buffersize=512):
+#    with open(filepath, 'wb') as f:
+#        numitems = len(indices)
+#        for i in xrange(0, numitems, buffersize):
+#            waves = table[indices[i:i+buffersize]][column]
+#            waves = waves[:, :, channels]
+#            waves = np.int16(waves)
+#            waves.tofile(f)
 
+def write_clu(clus, filepath):
+    """writes cluster cluster assignments to text file readable by klusters and neuroscope.
+input: clus is a 1D or 2D numpy array of integers
+output:
+top line: number of clusters (max cluster)
+next lines: one integer per line"""
+    clu_file = open( filepath,'w')
+    #header line: number of clusters
+    n_clu = clus.max()+1
+    clu_file.write( '%i\n'%n_clu)
+    #one cluster per line
+    np.savetxt(clu_file,np.int16(clus),fmt="%i")
+    clu_file.close()
+
+def write_spk_buffered(exptable,filepath, indices,
+                       buffersize=512): 
+    with open(filepath, 'wb') as f:
+        numitems = len(indices)
+        for i in xrange(0, numitems, buffersize):
+            waves = exptable[indices[i:i+buffersize],:,:]  
+            #waves = waves[:, :, channels]
+            waves = np.int16(waves)
+            waves.tofile(f)
+
+def write_xml(probe,n_ch,n_samp,n_feat,sample_rate,filepath):
+    """makes an xml parameters file so we can look at the data in klusters"""ls 
+    parameters = Element('parameters')
+    acquisitionSystem = SubElement(parameters,'acquisitionSystem')
+    SubElement(acquisitionSystem,'nBits').text = '16'
+    SubElement(acquisitionSystem,'nChannels').text = str(n_ch)
+    SubElement(acquisitionSystem,'samplingRate').text = str(int(sample_rate))
+    #SubElement(acquisitionSystem,'voltageRange').text = str(Parameters['VOLTAGE_RANGE'])
+    #SubElement(acquisitionSystem,'amplification').text = str(Parameters['AMPLIFICATION'])
+    #SubElement(acquisitionSystem,'offset').text = str(Parameters['OFFSET'])
+    
+    anatomicalDescription = SubElement(SubElement(parameters,'anatomicalDescription'),'channelGroups')
+    for shank in probe.shanks_set:
+        shankgroup = SubElement(anatomicalDescription,'group')
+        for i_ch in probe.channel_set[shank]:
+            SubElement(shankgroup,'channel').text=str(i_ch)
+# channels = SubElement(SubElement(SubElement(parameters,'channelGroups'),'group'),'channels')
+# for i_ch in range(n_ch):
+# SubElement(channels,'channel').text=str(i_ch)
+    
+    spikeDetection = SubElement(SubElement(parameters,'spikeDetection'),'channelGroups')
+    for shank in probe.shanks_set:
+        shankgroup = SubElement(spikeDetection,'group')
+        channels = SubElement(shankgroup,'channels')
+        for i_ch in probe.channel_set[shank]:
+            SubElement(channels,'channel').text=str(i_ch)
+# channels = SubElement(group,'channels')
+# for i_ch in range(n_ch):
+# SubElement(channels,'channel').text=str(i_ch)
+        SubElement(shankgroup,'nSamples').text = str(n_samp)
+        SubElement(shankgroup,'peakSampleIndex').text = str(n_samp//2)
+        SubElement(shankgroup,'nFeatures').text = str(n_feat)
+    
+    indent_xml(parameters)
+    ElementTree(parameters).write(filepath)
+    
+
+def indent_xml(elem, level=0):
+    """input: elem = root element
+changes text of nodes so resulting xml file is nicely formatted.
+copied from http://effbot.org/zone/element-lib.htm#prettyprint"""
+    i = "\n" + level*" "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + " "
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for elem in elem:
+            indent_xml(elem, level+1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
+
+def write_res(samples,filepath):
+    """input: 1D vector of times shape = (n_times,) or (n_times, 1)
+    output: writes .res file, which has integer sample numbers"""
+    np.savetxt(filepath,samples,fmt="%i")
+            
+            
 def write_mask(mask, filename, fmt="%f"):
     fd = open(filename, 'w')
     fd.write(str(mask.shape[1])+'\n') # number of features
@@ -32,7 +127,7 @@ def write_fet(feats, filepath):
     np.savetxt(feat_file, feats, fmt="%i")
     feat_file.close()    
 
-@ju.func_cache    
+@ju.func_cache
 def make_KKscript(KKparams, filebase,scriptname):
     
     keylist = KKparams['keylist']
@@ -56,7 +151,7 @@ def make_KKscript(KKparams, filebase,scriptname):
     
     return scriptstring
 
-@ju.func_cache
+@ju.func_cache 
 def make_KKfiles_Script(hybdatadict, SDparams,prb, detectioncrit, KKparams):
     '''Creates the files required to run KlustaKwik'''
     argSD = [hybdatadict,SDparams,prb]
@@ -124,6 +219,80 @@ def make_KKfiles_Script(hybdatadict, SDparams,prb, detectioncrit, KKparams):
     make_KKscript(KKparams,basefilename,KKscriptname)
     
     return basefilename
+
+def make_KKfiles_viewer(hybdatadict, SDparams,prb, detectioncrit, KKparams):
+    
+    argSD = [hybdatadict,SDparams,prb]
+    if ju.is_cached(rsd.run_spikedetekt,*argSD):
+        print 'Yes, SD has been run \n'
+        hash_hyb_SD = rsd.run_spikedetekt(hybdatadict,SDparams,prb)
+    else:
+        print 'You need to run Spikedetekt before attempting to analyse results ' 
+    
+    
+    argTD = [hybdatadict, SDparams,prb, detectioncrit]      
+    if ju.is_cached(ds.test_detection_algorithm,*argTD):
+        print 'Yes, you have run detection_statistics.test_detection_algorithm() \n'
+        detcrit_groundtruth = ds.test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit)
+    else:
+        print 'You need to run detection_statistics.test_detection_algorithm() \n in order to obtain a groundtruth'
+        
+    argKKfile = [hybdatadict, SDparams,prb, detectioncrit, KKparams]
+    if ju.is_cached(make_KKfiles_Script,*argKKfile):
+        print 'Yes, make_KKfiles_Script  has been run \n'
+        
+    else:
+        print 'Need to run make_KKfiles_Script first, running now ' 
+    basefilename = make_KKfiles_Script(hybdatadict, SDparams,prb, detectioncrit, KKparams)    
+        
+    mainbasefilelist = [hash_hyb_SD, detcrit_groundtruth['detection_hashname']]
+    mainbasefilename = hash_utils.make_concatenated_filename(mainbasefilelist)    
+    
+    DIRPATH = hybdatadict['output_path']
+    os.chdir(DIRPATH)
+    with Experiment(hash_hyb_SD, dir= DIRPATH, mode='r') as expt:
+        if KKparams['numspikesKK'] is not None: 
+            #spk = expt.channel_groups[0].spikes.waveforms_filtered[0:KKparams['numspikesKK'],:,:]
+            res = expt.channel_groups[0].spikes.time_samples[0:KKparams['numspikesKK']]
+            #fets = expt.channel_groups[0].spikes.features[0:KKparams['numspikesKK']]
+            #fmasks = expt.channel_groups[0].spikes.features_masks[0:KKparams['numspikesKK'],:,1]
+            
+           # masks = expt.channel_groups[0].spikes.masks[0:KKparams['numspikesKK']]
+
+        else: 
+            #spk = expt.channel_groups[0].spikes.waveforms_filtered[:,:,:]
+            res = expt.channel_groups[0].spikes.time_samples[:]
+            #fets = expt.channel_groups[0].spikes.features[:]
+            #fmasks = expt.channel_groups[0].spikes.features_masks[:,:,1]
+            #print fmasks[3,:]
+            #masks = expt.channel_groups[0].spikes.masks[:]
+            
+        mainresfile = DIRPATH + mainbasefilename + '.res.1' 
+        mainspkfile = DIRPATH + mainbasefilename + '.spk.1'
+        detcritclufilename = DIRPATH + mainbasefilename + '.detcrit.clu.1'
+        write_res(res,mainresfile)
+        
+       # write_spk_buffered(exptable,filepath, indices,
+       #                buffersize=512)
+        write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
+                            mainspkfile,
+                           np.arange(len(res)))
+        
+        write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
+            
+        #s_total = SDparams['extract_s_before']+SDparams['extract_s_after']
+            
+        #write_xml(prb,
+        #          n_ch = SDparams['nchannels'],
+        #          n_samp = SDparams['S_TOTAL'],
+        #          n_feat = s_total,
+        #          sample_rate = SDparams['sample_rate'],
+        #          filepath = basename+'.xml')
+    mainxmlfile =  hybdatadict['donor_path'] + hybdatadict['donor']+'_afterprocessing.xml'   
+    
+    os.system('ln -s %s %s.spk.1 ' %(mainspkfile,basefilename))
+    os.system('ln -s %s %s.res.1 ' %(mainresfile,basefilename))
+    os.system('ln -s %s %s.xml ' %(mainxmlfile,basefilename))
 
 # <codecell>
 
