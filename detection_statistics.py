@@ -7,12 +7,18 @@ import os
 import hash_utils
 import joblib_utils as ju
 import numpy as np
+import collections as col
 import hybridata_creation_lib as hcl
 import runspikedetekt_lib as rsd
 from spikedetekt2 import *
 from kwiklib.dataio import klustersloader
 from kwiklib.dataio import selection 
 #from IPython import embed
+
+def read_amsk_file(fh):
+    amsk = np.loadtxt(fh, dtype = np.int16, skiprows = 1)
+    return amsk
+
 
 def add_clustering_kwik(fh,clustering_array, clustering_name):
     with tb.openFile(fh, mode = 'a') as kwikfile: 
@@ -54,7 +60,8 @@ def test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit):
       allowed_discrepancy,CSthreshold
        This function will call SpikeSimilarityMeasure(a,b)
          and output the file: Hash(hybdatadict)_Hash(sdparams)_Hash(detectioncrit).kwik  
-       It will return detcrit_groundtruth, the groundtruth relative to the criteria, detectioncrit '''
+       It will return detcrit_groundtruth, the groundtruth relative to the criteria, detectioncrit. 
+       This will be an ordered dictionary so that hashing can work!'''
     
     
     if ju.is_cached(hcl.create_hybrid_kwdfile,hybdatadict):
@@ -86,19 +93,22 @@ def test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit):
         existencewin = np.zeros_like(creation_groundtruth)
         
         #Mean binary mask for hybrid cluster
-        binmeanmask = hcl.make_average_datamask_from_mean(hybdatadict, fmask= False)
+        if 'manual_meanmask' in detectioncrit.keys():
+            binmeanmask = detectioncrit['manual_meanmask']
+        else:    
+            binmeanmask = hcl.make_average_datamask_from_mean(hybdatadict, fmask= False)
         
-        indices_in_timewindow = {}
+        indices_in_timewindow = hash_utils.order_dictionary({})
         #indices_in_timewindow = {0 (this is the 1st hybrid spike): (array([0, 1, 3]),),
         #1: (array([89, 90]),),
         #2: (array([154, 156, 157]),),
         #3: (array([191]),),
         #4: (array([259, 260, 261]),),
         
-        num_spikes_in_timewindow = {}
+        num_spikes_in_timewindow = hash_utils.order_dictionary({})
         
-        CauchySchwarz = {}
-        detected = {}
+        CauchySchwarz = hash_utils.order_dictionary({})
+        detected = hash_utils.order_dictionary({})
         NumHybSpikes = creation_groundtruth.shape[0]
         detectedgroundtruth = np.zeros_like(detected_times)
         print detectedgroundtruth.shape
@@ -128,9 +138,11 @@ def test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit):
         #percentage_detected = float(sum(detected.values()))/NumHybSpikes
         
     
-    detcrit_groundtruth ={'detection_hashname':
-    detectionhashname,'binmeanmask': binmeanmask, 'numspikes_in_timeswindow': num_spikes_in_timewindow,
+    
+    detcrit_groundtruth_pre ={'detection_hashname':
+    detectionhashname,'binmeanmask': binmeanmask,'indices_in_timewindow':indices_in_timewindow, 'numspikes_in_timeswindow': num_spikes_in_timewindow,
     'Cauchy_Schwarz':CauchySchwarz,'detected': detected,'detected_groundtruth': detectedgroundtruth}
+    detcrit_groundtruth = hash_utils.order_dictionary(detcrit_groundtruth_pre)
     return detcrit_groundtruth    
         
     

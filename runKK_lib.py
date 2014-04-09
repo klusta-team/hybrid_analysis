@@ -15,6 +15,8 @@ import detection_statistics as ds
 from spikedetekt2 import *
 from xml.etree.ElementTree import ElementTree,Element,SubElement
 
+from IPython import embed
+
 #write_mask(M, basename+'.fmask.'+str(shank), fmt='%f')
 
 #def write_spk_buffered(table, column, filepath, indices,
@@ -26,6 +28,24 @@ from xml.etree.ElementTree import ElementTree,Element,SubElement
 #            waves = waves[:, :, channels]
 #            waves = np.int16(waves)
 #            waves.tofile(f)
+
+def write_trivial_clu(restimes,filepath):
+    """writes cluster cluster assignments to text file readable by klusters and neuroscope.
+    input: clus is a 1D or 2D numpy array of integers
+    output:
+        top line: number of clusters (max cluster)
+        next lines: one integer per line"""
+    clus = np.zeros_like(restimes) 
+    clu_file = open( filepath,'w')
+    #header line: number of clusters
+    if len(clus) == 0:
+        n_clu = 1
+    else:
+        n_clu = clus.max() + 1
+    clu_file.write( '%i\n'%n_clu)
+    #one cluster per line
+    np.savetxt(clu_file,np.int16(clus),fmt="%i")
+    clu_file.close() 
 
 def write_clu(clus, filepath):
     """writes cluster cluster assignments to text file readable by klusters and neuroscope.
@@ -52,7 +72,7 @@ def write_spk_buffered(exptable,filepath, indices,
             waves.tofile(f)
 
 def write_xml(probe,n_ch,n_samp,n_feat,sample_rate,filepath):
-    """makes an xml parameters file so we can look at the data in klusters"""ls 
+    """makes an xml parameters file so we can look at the data in klusters"""
     parameters = Element('parameters')
     acquisitionSystem = SubElement(parameters,'acquisitionSystem')
     SubElement(acquisitionSystem,'nBits').text = '16'
@@ -136,7 +156,8 @@ def make_KKscript(KKparams, filebase,scriptname):
     #           'PriorPoint','SaveSorted','SaveCovarianceMeans','UseMaskedInitialConditions',
      #          'AssignToFirstClosestMask','UseDistributional']
 
-    KKlocation = '/martinottihome/skadir/GIT_masters/klustakwik/MaskedKlustaKwik'  
+    #KKlocation = '/martinottihome/skadir/GIT_masters/klustakwik/MaskedKlustaKwik'  
+    KKlocation = KKparams['KKlocation']
     scriptstring = KKlocation + ' '+ filebase + ' 1 '
     for KKey in keylist: 
         #print '-'+KKey +' '+ str(KKparams[KKey])
@@ -150,6 +171,103 @@ def make_KKscript(KKparams, filebase,scriptname):
     os.system(changeperms)
     
     return scriptstring
+
+
+def make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, KKparams):
+    '''Creates the files required to run KlustaKwik'''
+    argSD = [hybdatadict,SDparams,prb]
+    if ju.is_cached(rsd.run_spikedetekt,*argSD):
+        print 'Yes, SD has been run \n'
+        hash_hyb_SD = rsd.run_spikedetekt(hybdatadict,SDparams,prb)
+    else:
+        print 'You need to run Spikedetekt before attempting to analyse results ' 
+    
+    
+    argTD = [hybdatadict, SDparams,prb, detectioncrit]      
+    if ju.is_cached(ds.test_detection_algorithm,*argTD):
+        print 'Yes, you have run detection_statistics.test_detection_algorithm() \n'
+        detcrit_groundtruth = ds.test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit)
+    else:
+        print 'You need to run detection_statistics.test_detection_algorithm() \n in order to obtain a groundtruth' 
+    
+    KKhash = hash_utils.hash_dictionary_md5(KKparams)
+    baselist = [hash_hyb_SD, detcrit_groundtruth['detection_hashname'], KKhash]
+    basefilename =  hash_utils.make_concatenated_filename(baselist)
+    
+    mainbasefilelist = [hash_hyb_SD, detcrit_groundtruth['detection_hashname']]
+    mainbasefilename = hash_utils.make_concatenated_filename(mainbasefilelist)
+    
+    DIRPATH = hybdatadict['output_path']
+    os.chdir(DIRPATH)
+    with Experiment(hash_hyb_SD, dir= DIRPATH, mode='r') as expt:
+        if KKparams['numspikesKK'] is not None: 
+            feats = expt.channel_groups[0].spikes.features[0:KKparams['numspikesKK']]
+            prefmasks = expt.channel_groups[0].spikes.features_masks[0:KKparams['numspikesKK'],:,1]
+            
+            premasks = expt.channel_groups[0].spikes.masks[0:KKparams['numspikesKK']]
+            res = expt.channel_groups[0].spikes.time_samples[0:KKparams['numspikesKK']]
+        else: 
+            feats = expt.channel_groups[0].spikes.features[:]
+            prefmasks = expt.channel_groups[0].spikes.features_masks[:,:,1]
+            #print fmasks[3,:]
+            premasks = expt.channel_groups[0].spikes.masks[:]
+            res = expt.channel_groups[0].spikes.time_samples[:]
+            
+        mainresfile = DIRPATH + mainbasefilename + '.res.1' 
+        mainspkfile = DIRPATH + mainbasefilename + '.spk.1'
+        detcritclufilename = DIRPATH + mainbasefilename + '.detcrit.clu.1'
+        trivialclufilename = DIRPATH + mainbasefilename + '.clu.1'
+        
+        write_res(res,mainresfile)
+        write_trivial_clu(res,trivialclufilename)
+        write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
+                            mainspkfile,
+                           np.arange(len(res)))
+        write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
+        
+        times = np.expand_dims(res, axis =1)
+        masktimezeros = np.zeros_like(times)
+        fets = np.concatenate((feats, times),axis = 1)
+        fmasks = np.concatenate((prefmasks, masktimezeros),axis = 1)
+        masks = np.concatenate((premasks, masktimezeros),axis = 1)
+    
+    mainfetfile = DIRPATH + mainbasefilename+'.fet.1'
+    mainfmaskfile = DIRPATH + mainbasefilename+'.fmask.1'
+    mainmaskfile = DIRPATH + mainbasefilename+'.mask.1'
+    
+    #print fets
+    #embed()
+    
+    if not os.path.isfile(mainfetfile):
+        write_fet(fets,mainfetfile )
+    else: 
+        print mainfetfile, ' already exists, moving on \n '
+        
+    if not os.path.isfile(mainfmaskfile):
+        write_mask(fmasks,mainfmaskfile,fmt='%f')
+    else: 
+        print mainfmaskfile, ' already exists, moving on \n '  
+    
+    if not os.path.isfile(mainmaskfile):
+        write_mask(masks,mainmaskfile,fmt='%f')
+    else: 
+        print mainmaskfile, ' already exists, moving on \n '    
+        
+    
+    mainxmlfile =  hybdatadict['donor_path'] + hybdatadict['donor']+'_afterprocessing.xml'   
+    os.system('ln -s %s %s.fet.1 ' %(mainfetfile,basefilename))
+    os.system('ln -s %s %s.fmask.1 ' %(mainfmaskfile,basefilename))
+    os.system('ln -s %s %s.mask.1 ' %(mainmaskfile,basefilename))
+    os.system('ln -s %s %s.trivial.clu.1 ' %(trivialclufilename,basefilename))
+    os.system('ln -s %s %s.spk.1 ' %(mainspkfile,basefilename))
+    os.system('ln -s %s %s.res.1 ' %(mainresfile,basefilename))
+    os.system('cp %s %s.xml ' %(mainxmlfile,mainbasefilename))
+    os.system('cp %s %s.xml ' %(mainxmlfile,basefilename))
+    
+    KKscriptname = basefilename
+    make_KKscript(KKparams,basefilename,KKscriptname)
+    
+    return basefilename
 
 @ju.func_cache 
 def make_KKfiles_Script(hybdatadict, SDparams,prb, detectioncrit, KKparams):
@@ -270,7 +388,9 @@ def make_KKfiles_viewer(hybdatadict, SDparams,prb, detectioncrit, KKparams):
         mainresfile = DIRPATH + mainbasefilename + '.res.1' 
         mainspkfile = DIRPATH + mainbasefilename + '.spk.1'
         detcritclufilename = DIRPATH + mainbasefilename + '.detcrit.clu.1'
+        trivialclufilename = DIRPATH + mainbasefilename + '.clu.1'
         write_res(res,mainresfile)
+        write_trivial_clu(res,trivialclufilename)
         
        # write_spk_buffered(exptable,filepath, indices,
        #                buffersize=512)
@@ -290,9 +410,12 @@ def make_KKfiles_viewer(hybdatadict, SDparams,prb, detectioncrit, KKparams):
         #          filepath = basename+'.xml')
     mainxmlfile =  hybdatadict['donor_path'] + hybdatadict['donor']+'_afterprocessing.xml'   
     
+    os.system('ln -s %s %s.clu.1 ' %(trivialclufilename,basefilename))
     os.system('ln -s %s %s.spk.1 ' %(mainspkfile,basefilename))
     os.system('ln -s %s %s.res.1 ' %(mainresfile,basefilename))
-    os.system('ln -s %s %s.xml ' %(mainxmlfile,basefilename))
+    os.system('cp %s %s.xml ' %(mainxmlfile,basefilename))
+    
+    return basefilename
 
 # <codecell>
 
@@ -453,7 +576,7 @@ if __name__== "__main__":
               'UseDistributional':UseDistributional
              
             }
-    make_KKfiles_Script(hybdatadict, sdparams,prb, detectioncrit, KKparams)
+    basefile = make_KKfiles_Script(hybdatadict, sdparams,prb, detectioncrit, KKparams)
 
 
     

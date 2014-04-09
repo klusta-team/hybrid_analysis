@@ -8,7 +8,9 @@ import hash_utils
 import scipy
 import joblib_utils as ju
 import numpy as np
+import collections as col
 import tables as tb
+import time_series_utils as tsu
 from spikedetekt2.dataio import (DatRawDataReader, create_kwd, convert_dat_to_kwd, add_recording_in_kwd,read_raw)
 from kwiklib.dataio.tools import (load_binary, normalize)
 from kwiklib.dataio import klustersloader
@@ -20,7 +22,7 @@ def merge_input_dicts(dict1,dict2):
     merged_dict = dict(dict1.items() + dict2.items())
     return merged_dict
 
-
+@ju.func_cache
 def interpolated_waveshift(nChannels,waveform,littleshift,knownsample_times):
     '''Utility function for interpolated a wave shifted by a fraction of 
     a sample
@@ -56,32 +58,45 @@ def convert_tuple_to_dict(keytuple, valuetuple):
     return converted_dict
 
 #@ju.func_cache
-def create_time_series_constant(rate, samplerate, num_channels, start = 0, end = None, acceptor = None, buffersamples = None):
-    '''Will create time series for constant rate,
-       this will be cached and stored for future reference 
-       when creating hybrid datasets and for analysis.
-       e.g. acceptor = '/chandelierhome/skadir/hybrid_analysis/mariano/n6mab041109_60sec.dat'
-    '''
-    if (not(acceptor is None) and end is None) : 
-        totalsamples = os.stat(acceptor).st_size/(2*num_channels)
-        end = totalsamples
-        
-    end = end - buffersamples    
-    betweensamps = round(samplerate/rate)    
-    numspikes = round((end-start)/betweensamps)+1
-    donorspike_timeseries = np.linspace(start, end, num = numspikes)
-    return donorspike_timeseries
+#def create_time_series_constant(rate, samplerate, num_channels, start = 0, end = None, acceptor = None, buffersamples = None):
+#    '''Will create time series for constant rate,
+#       this will be cached and stored for future reference 
+#       when creating hybrid datasets and for analysis.
+#       e.g. acceptor = '/chandelierhome/skadir/hybrid_analysis/mariano/n6mab041109_60sec.dat'
+#    '''
+#    if (not(acceptor is None) and end is None) : 
+#        totalsamples = os.stat(acceptor).st_size/(2*num_channels)
+#        end = totalsamples
+#        
+#    end = end - buffersamples    
+#    betweensamps = round(samplerate/rate)    
+#    numspikes = round((end-start)/betweensamps)+1
+#    donorspike_timeseries = np.linspace(start, end, num = numspikes)
+#    return donorspike_timeseries
 
-def make_uniform_amplitudes(NumSpikes2Add, lower_bound, upper_bound):
-    ''' returns an array called 
-    amplitude_array = [0.3, 1.2, 0.4,..]
-    whose shape is:
-    amplitude_array.shape = (NumSpikes2Add,)
+#@ju.func_cache
+#def make_uniform_amplitudes(NumSpikes2Add, lower_bound, upper_bound):
+#    ''' returns an array called 
+#    amplitude_array = [0.3, 1.2, 0.4,..]
+#    whose shape is:
+#    amplitude_array.shape = (NumSpikes2Add,)
+#    
+#    '''
+#    amplitude_array = np.random.uniform(lower_bound, upper_bound, NumSpikes2Add)
+#    return amplitude_array
+
+#@ju.func_cache
+#def make_uniform_amplitudes(NumSpikes2Add, lower_bound, upper_bound):
+#    ''' returns an array called 
+#    amplitude_array = [0.3, 1.2, 0.4,..]
+#    whose shape is:
+ #   amplitude_array.shape = (NumSpikes2Add,)
     
-    '''
-    amplitude_array = np.random.uniform(lower_bound, upper_bound, NumSpikes2Add)
-    return amplitude_array
+#    '''
+ #   amplitude_array = np.random.uniform(lower_bound, upper_bound, NumSpikes2Add)
+#    return amplitude_array
 
+@ju.func_cache
 def create_kwd_from_dat(kwdfilenamepath,datfilenamepath, prm=None):#recordings=None,):
     """Add data from a .dat file to a .kwd file
        Minimally we require: 
@@ -99,7 +114,7 @@ def create_kwd_from_dat(kwdfilenamepath,datfilenamepath, prm=None):#recordings=N
     convert_dat_to_kwd(data_readin,kwdfilenamepath)
 
 
-#@ju.func_cache
+@ju.func_cache
 def create_average_hybrid_wave_spike(donor_dict):
     '''Input a dictionary donor_dict or a hybdatadict
       will  create the mean spike file from taking the average of
@@ -142,7 +157,7 @@ def create_average_hybrid_wave_spike(donor_dict):
     
     return donor_id_msua_data
 
-
+@ju.func_cache
 def make_average_datamask_from_mean(donor_dict, fmask = True):
     '''Will create the mean mask file from the donor_dict or hybdatadict information
       meanmask_file = a file called donor_id.amsk.1.
@@ -164,15 +179,38 @@ def make_average_datamask_from_mean(donor_dict, fmask = True):
     donor_id_amsk_data  = np.sum(selected_fmasks,axis = 0)/num_selected_spikes     
     return donor_id_amsk_data
 
-def make_uniform_amplitudes(NumSpikes2Add, lower_bound, upper_bound):
-    ''' returns an array called 
-    amplitude_array = [0.3, 1.2, 0.4,..]
-    whose shape is:
-    amplitude_array.shape = (NumSpikes2Add,)
+@ju.func_cache
+def precreation_hybridict_ordered(donor_dict_dis,acceptor_dict_dis,time_size_dict_dis):
+    ''' Creates one dictionary hybdatadict out of three
+    
+    The inputs are:
+        
+        donordict = {'donor': 'n6mab031109', 'donorshanknum': 1, 'donorcluster': 54, 
+             'donor_path':'/chandelierhome/skadir/hybrid_analysis/mariano/donors/',
+                 'experiment_path': '/chandelierhome/skadir/hybrid_analysis/mariano/', 'donorcluid': 'MKKdistfloat'}
+        
+        time_size_dict = {'amplitude_generating_function_args':[0.5, 1.5],'amplitude_generating_function':make_uniform_amplitudes,
+                  'donorspike_timeseries_generating_function':create_time_series_constant,
+                  'sampling_rate':20000, 'firing_rate':3, 'start_time':10,'end_time':None,
+                  'donorspike_timeseries_arguments': 'arg'}
+                  
+        acceptor_dict = {'acceptor_path':'/chandelierhome/skadir/hybrid_analysis/mariano/acceptors/',
+                 'acceptor': 'n6mab041109_60sec.dat','numchannels':32,
+                 'output_path':'/chandelierhome/skadir/hybrid_analysis/mariano/',
+                 }    
     
     '''
-    amplitude_array = np.random.uniform(lower_bound, upper_bound, NumSpikes2Add)
-    return amplitude_array
+    donor_dict = hash_utils.order_dictionary(donor_dict_dis)
+    acceptor_dict = hash_utils.order_dictionary(acceptor_dict_dis)
+    time_size_dict = hash_utils.order_dictionary(time_size_dict_dis)
+    
+    hashDlist = hash_utils.get_product_hashlist([donor_dict,acceptor_dict,time_size_dict])
+    hashD = hash_utils.make_concatenated_filename(hashDlist)
+    hybdatadict_dis = merge_input_dicts(donor_dict,merge_input_dicts(acceptor_dict,time_size_dict))
+    hybdatadict_dis['hashD']= hashD
+    
+    hybdatadict = hash_utils.order_dictionary(hybdatadict_dis)
+    return hybdatadict
 
 @ju.func_cache
 def precreation_hybridict(donor_dict,acceptor_dict,time_size_dict):
@@ -195,18 +233,24 @@ def precreation_hybridict(donor_dict,acceptor_dict,time_size_dict):
                  }    
     
     '''
+    
+    
     hashDlist = hash_utils.get_product_hashlist([donor_dict,acceptor_dict,time_size_dict])
     hashD = hash_utils.make_concatenated_filename(hashDlist)
     hybdatadict = merge_input_dicts(donor_dict,merge_input_dicts(acceptor_dict,time_size_dict))
     hybdatadict['hashD']= hashD
+    
     return hybdatadict
+
+
+
 
 @ju.func_cache
 def create_hybrid_kwdfile(hybdatadict):
     ''' This function outputs a file called:
         Hash(hybdatadict = [donor_dict,acceptor_dict,time_size_dict]).kwd,
         
-        The input is hybdatadict which is the output of 
+        The input is hybdatadict (an ordered dictionary) which is the output of 
         
         hybdatadict = precreation_hybridict(donor_dict,acceptor_dict,time_size_dict)
                         
@@ -258,12 +302,15 @@ def create_hybrid_kwdfile(hybdatadict):
     #create_time_series_constant(rate, samplerate, num_channels, start = 0, end = None, acceptor = None)
     print 'acceptor path is ', hybdatadict['acceptor_path']
     acceptordat = hybdatadict['acceptor_path']+hybdatadict['acceptor']
-    donorspike_timeseries = hybdatadict['donorspike_timeseries_generating_function'](hybdatadict['firing_rate'], 
-                                                                                        hybdatadict['sampling_rate'],
-                                                        hybdatadict['numchannels'],
-                                                        hybdatadict['start_time'],
-                                                        hybdatadict['end_time'],
-                                                         acceptor = acceptordat, buffersamples = np.ceil(SamplesPerSpike/2))
+    stringtimeforeval =  hybdatadict['donorspike_timeseries_generating_function']+'(hybdatadict[\'firing_rate\'], hybdatadict[\'sampling_rate\'],hybdatadict[\'numchannels\'],hybdatadict[\'start_time\'],hybdatadict[\'end_time\'],acceptor = acceptordat, buffersamples = np.ceil(SamplesPerSpike/2))'
+    print stringtimeforeval
+#    donorspike_timeseries = hybdatadict['donorspike_timeseries_generating_function'](hybdatadict['firing_rate'], 
+#                                                                                        hybdatadict['sampling_rate'],
+#                                                        hybdatadict['numchannels'],
+#                                                        hybdatadict['start_time'],
+#                                                        hybdatadict['end_time'],
+#                                                         acceptor = acceptordat, buffersamples = np.ceil     #(SamplesPerSpike/2))                                                
+    donorspike_timeseries = eval(stringtimeforeval)                                                  
     # NOTE: The buffer ensures that the spikes can fit inside the acceptor dat file.
     #donorspike_timeseries.shape = (NumSpikes2Add, )
     NumSpikes2Add = donorspike_timeseries.shape[0] #Number of spikes be added
@@ -291,7 +338,10 @@ def create_hybrid_kwdfile(hybdatadict):
         
         amp_gen_args = [NumSpikes2Add]
         amp_gen_args.extend(hybdatadict['amplitude_generating_function_args'])
-        amplitude = hybdatadict['amplitude_generating_function'](*amp_gen_args)
+        #amplitude = hybdatadict['amplitude_generating_function'](*amp_gen_args)
+        evalampstring =  hybdatadict['amplitude_generating_function']+'(*amp_gen_args)'
+        print evalampstring
+        amplitude = eval(evalampstring)
         # amplitude.shape = (NumSpikes2Add,)
         
         print 'Adding ', NumSpikes2Add, ' spikes'
@@ -333,6 +383,8 @@ def create_hybrid_kwdfile(hybdatadict):
     #kwdfile.close()
     creation_groundtruth = donorspike_timeseries 
     return avespike, kwdoutputname, creation_groundtruth, amplitude
+
+
 
 
 # Obsolete function below    
