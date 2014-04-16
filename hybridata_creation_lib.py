@@ -2,7 +2,7 @@
 # <nbformat>3.0</nbformat>
 
 # <codecell>
-
+import matplotlib.pyplot as plt
 import os
 import hash_utils 
 import scipy
@@ -210,6 +210,7 @@ def precreation_hybridict_ordered(donor_dict_dis,acceptor_dict_dis,time_size_dic
     hybdatadict_dis['hashD']= hashD
     
     hybdatadict = hash_utils.order_dictionary(hybdatadict_dis)
+    
     return hybdatadict
 
 @ju.func_cache
@@ -239,9 +240,29 @@ def precreation_hybridict(donor_dict,acceptor_dict,time_size_dict):
     hashD = hash_utils.make_concatenated_filename(hashDlist)
     hybdatadict = merge_input_dicts(donor_dict,merge_input_dicts(acceptor_dict,time_size_dict))
     hybdatadict['hashD']= hashD
-    
+    print 'Printing during execution changed'
     return hybdatadict
 
+@ju.func_cache
+def make_hamming_spike(avespike):
+    avespikeminusmean = np.zeros_like(avespike)
+    SamplesPerSpike = avespike.shape[0]
+    avespikechannelmean = np.zeros(avespike.shape[1])
+    for chan in np.arange(SamplesPerSpike):
+        avespikechannelmean[chan] = np.true_divide(np.sum(avespike[:,chan]),SamplesPerSpike)
+        avespikeminusmean[:,chan] = avespike[:,chan] - avespikechannelmean[chan] 
+        
+    prehamspike = np.zeros_like(avespike)
+    hamspike = np.zeros_like(avespike)
+    #hamspike.shape = (number of samples per spike,nChannels) Check this! 
+    ham = scipy.signal.hamming(SamplesPerSpike-2)
+    hammy = np.expand_dims(ham,axis = 1)
+    hamnut = np.zeros((SamplesPerSpike,1))
+    hamnut[1:SamplesPerSpike-1] = hammy
+    for s in np.arange(SamplesPerSpike):
+        prehamspike[s,:] = avespikeminusmean[s,:]*hamnut[s]
+        
+    return prehamspike    
 
 
 
@@ -264,23 +285,28 @@ def create_hybrid_kwdfile(hybdatadict):
         It also returns hybdatadict = donordict U time_size_dict U acceptor_dict
         '''    
     avespike = create_average_hybrid_wave_spike(hybdatadict)
-    prehamspike = np.zeros_like(avespike)
-    hamspike = np.zeros_like(avespike)
-    #hamspike.shape = (number of samples per spike,nChannels) Check this!
-    
-    #Changed to
-    #hamspike.shape = (nChannels,number of samples per spike) Check this!
-    
-    #OLD WAY-----------------------------------------
-    #avespike.shape[0] = number of samples per spike
     SamplesPerSpike = avespike.shape[0]
-    ham = scipy.signal.hamming(SamplesPerSpike-2)
-    hammy = np.expand_dims(ham,axis = 1)
-    hamnut = np.zeros((SamplesPerSpike,1))
-    hamnut[1:SamplesPerSpike-1] = hammy
-    for i in np.arange(SamplesPerSpike):
-        prehamspike[i,:] = avespike[i,:]*hamnut[i]
+    
+    prehamspike = make_hamming_spike(avespike)
+    ##NEW WAY-----------------------------------------
+    ##avespikeminusmean = np.zeros_like(avespike)
+    ##SamplesPerSpike = avespike.shape[0]
+    ##avespikechannelmean = np.zeros(avespike.shape[1])
+    ##for chan in np.arange(SamplesPerSpike):
+    ##    avespikechannelmean[chan] = np.true_divide(np.sum(avespike[:,chan]),SamplesPerSpike)
+    ##    avespikeminusmean[:,chan] = avespike[:,chan] - avespikechannelmean[chan] 
         
+    ##prehamspike = np.zeros_like(avespike)
+    ##hamspike = np.zeros_like(avespike)
+    
+    
+    ##ham = scipy.signal.hamming(SamplesPerSpike-2)
+    ##hammy = np.expand_dims(ham,axis = 1)
+    ##hamnut = np.zeros((SamplesPerSpike,1))
+    ##hamnut[1:SamplesPerSpike-1] = hammy
+    ##for s in np.arange(SamplesPerSpike):
+    ##    prehamspike[s,:] = avespikeminusmean[s,:]*hamnut[s]
+    ##NEW WAY-----------------------------------------    
         
     #print 'avespike ' , avespike    
     #print 'prehamspike ' , prehamspike    
@@ -382,14 +408,30 @@ def create_hybrid_kwdfile(hybdatadict):
         rawdata.flush()
     #kwdfile.close()
     creation_groundtruth = donorspike_timeseries 
-    return avespike, kwdoutputname, creation_groundtruth, amplitude
+    return hamspike, kwdoutputname, creation_groundtruth, amplitude
 
+def plot_spike(graphpath,avehamspike,ifshow):
+    fig1 = plt.figure(1)
+    axes1 = fig1.add_axes([0.1,0.1,0.8,0.8])
+    axes1.set_xlabel('Samples')
+    #axes1.set_ylabel('')
 
+    numchans = avehamspike.shape[1]
+    axes1.hold(True)
+    const = 500
+    for chan in np.arange(numchans):
+        #axis = plt.subplot(hybdatadict['numchannels'],1,i+1)
+        axes1.plot(avehamspike[:,chan]+const*chan)
+    
+    if ifshow ==True:
+        plt.show()
+    fig1.savefig('%s.pdf'%(graphpath))
+    return
 
 
 # Obsolete function below    
 #-------------------------------------------------------------------------------------
-
+#-------------------------------------------------------------------------------------
 @ju.func_cache
 def create_hybrid_kwdfile_old(donor_dict,acceptor_dict,time_size_dict):
     ''' This function outputs a file called:
