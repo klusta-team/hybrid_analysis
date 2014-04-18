@@ -11,6 +11,8 @@ import numpy as np
 import hybridata_creation_lib as hcl
 import runspikedetekt_lib as rsd
 import detection_statistics as ds
+import copy 
+
 #from spikedetekt2.dataio import Experiment
 from spikedetekt2 import *
 from xml.etree.ElementTree import ElementTree,Element,SubElement
@@ -145,8 +147,68 @@ def write_fet(feats, filepath):
     feat_file.write('%i\n' % feats.shape[1])
     #next lines: one feature vector per line
     np.savetxt(feat_file, feats, fmt="%i")
-    feat_file.close()    
+    feat_file.close()  
+      
+#@ju.func_cache - because expt can't be pickled by joblib
+#PicklingError("Can't pickle <function remove at 0x4c5e488>: it's not found as weakref.remove",)
+def make_spkresdetclu_files(expt,res,mainresfile, mainspkfile, detcritclufilename, trivialclufilename):
+    write_res(res,mainresfile)
+    write_trivial_clu(res,trivialclufilename)
+    write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
+                            mainspkfile,
+                           np.arange(len(res)))
+    write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
 
+
+def make_KKscript_supercomp(KKparams, filebase,scriptname,supercomparams):
+    '''Create bash script on Legion required to run KlustaKwik
+    supercomparams = {'time':'36:00:00','mem': '2G', 'tmpfs':'10G'}
+    
+    '''
+    argKKsc = [KKparams, filebase,scriptname]
+    if ju.is_cached(make_KKscript,*argKKsc):
+        print 'Yes, you have made the scripts for the local machine \n'
+        #scriptstring = make_KKscript(KKparams, filebase,scriptname)
+    else:
+        print 'You need to run make_KKscript  ' 
+    
+    keylist = KKparams['keylist']
+    
+    #keylist = ['MaskStarts','MaxPossibleClusters','FullStepEvery','MaxIter','RandomSeed',
+    #           'Debug','SplitFirst','SplitEvery','PenaltyK','PenaltyKLogN','Subset',
+    #           'PriorPoint','SaveSorted','SaveCovarianceMeans','UseMaskedInitialConditions',
+     #          'AssignToFirstClosestMask','UseDistributional']
+
+    #KKlocation = '/martinottihome/skadir/GIT_masters/klustakwik/MaskedKlustaKwik'  
+    
+    supercompstuff = '''#!/bin/bash -l
+#$ -S /bin/bash
+#$ -l h_rt=%s
+#$ -l mem=%s
+#$ -l tmpfs=%s
+#$ -N %s_supercomp
+#$ -P maskedklustakwik
+#$ -wd /home/smgxsk1/Scratch/
+cd $TMPDIR
+'''%(supercomparams['time'],supercomparams['mem'],supercomparams['tmpfs'],scriptname)
+    
+    KKsupercomplocation = supercompstuff +  '/home/smgxsk1/MKK_versions/klustakwik/MaskedKlustaKwik'
+    scriptstring = KKsupercomplocation + ' /home/smgxsk1/Scratch/'+ filebase + ' 1 '
+    for KKey in keylist: 
+        #print '-'+KKey +' '+ str(KKparams[KKey])
+        scriptstring = scriptstring + ' -'+ KKey +' '+ str(KKparams[KKey])
+    
+    print scriptstring
+    scriptfile = open('%s_supercomp.sh' %(scriptname),'w')
+    scriptfile.write(scriptstring)
+    scriptfile.close()
+    outputdir = ' /chandelierhome/skadir/hybrid_analysis/mariano/'
+    #changeperms='chmod 777 %s.sh' %(scriptname)
+    sendout = 'scp -r'+ outputdir + scriptname + '_supercomp.sh' + outputdir +scriptname + '.fet.1' + outputdir + scriptname + '.fmask.1 '+ 'smgxsk1@legion.rc.ucl.ac.uk:/home/smgxsk1/Scratch/'
+    os.system(sendout)
+    
+    return scriptstring
+    
 @ju.func_cache
 def make_KKscript(KKparams, filebase,scriptname):
     
@@ -166,13 +228,46 @@ def make_KKscript(KKparams, filebase,scriptname):
     print scriptstring
     scriptfile = open('%s.sh' %(scriptname),'w')
     scriptfile.write(scriptstring)
-    scriptfile.close
+    scriptfile.close()
     changeperms='chmod 777 %s.sh' %(scriptname)
     os.system(changeperms)
     
     return scriptstring
 
+def make_KKfiles_Script_supercomp(hybdatadict, SDparams,prb, detectioncrit, KKparams,supercomparams):
+    '''Creates the files required to run KlustaKwik'''
+    argSD = [hybdatadict,SDparams,prb]
+    if ju.is_cached(rsd.run_spikedetekt,*argSD):
+        print 'Yes, SD has been run \n'
+        hash_hyb_SD = rsd.run_spikedetekt(hybdatadict,SDparams,prb)
+    else:
+        print 'You need to run Spikedetekt before attempting to analyse results ' 
+    
+    
+    argTD = [hybdatadict, SDparams,prb, detectioncrit]      
+    if ju.is_cached(ds.test_detection_algorithm,*argTD):
+        print 'Yes, you have run detection_statistics.test_detection_algorithm() \n'
+        detcrit_groundtruth = ds.test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit)
+    else:
+        print 'You need to run detection_statistics.test_detection_algorithm() \n in order to obtain a groundtruth' 
+    
+    KKhash = hash_utils.hash_dictionary_md5(KKparams)
+    baselist = [hash_hyb_SD, detcrit_groundtruth['detection_hashname'], KKhash]
+    basefilename =  hash_utils.make_concatenated_filename(baselist)
+    
+    mainbasefilelist = [hash_hyb_SD, detcrit_groundtruth['detection_hashname']]
+    mainbasefilename = hash_utils.make_concatenated_filename(mainbasefilelist)
+    
+    DIRPATH = hybdatadict['output_path']
+    os.chdir(DIRPATH)
+    
+    KKscriptname = basefilename
+    make_KKscript_supercomp(KKparams,basefilename,KKscriptname,supercomparams)
+    
+    return basefilename
 
+
+@ju.func_cache
 def make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, KKparams):
     '''Creates the files required to run KlustaKwik'''
     argSD = [hybdatadict,SDparams,prb]
@@ -211,19 +306,26 @@ def make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, KKparams)
             prefmasks = expt.channel_groups[0].spikes.features_masks[:,:,1]
             #print fmasks[3,:]
             premasks = expt.channel_groups[0].spikes.masks[:]
-            res = expt.channel_groups[0].spikes.time_samples[:]
+            res = expt.channel_groups[0].spikes.time_samples[:]    
             
         mainresfile = DIRPATH + mainbasefilename + '.res.1' 
         mainspkfile = DIRPATH + mainbasefilename + '.spk.1'
         detcritclufilename = DIRPATH + mainbasefilename + '.detcrit.clu.1'
         trivialclufilename = DIRPATH + mainbasefilename + '.clu.1'
         
-        write_res(res,mainresfile)
-        write_trivial_clu(res,trivialclufilename)
-        write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
-                            mainspkfile,
-                           np.arange(len(res)))
-        write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
+        #arg_spkresdetclu = [expt,res,mainresfile, mainspkfile, detcritclufilename, trivialclufilename]
+        #if ju.is_cached(make_spkresdetclu_files,*arg_spkresdetclu):
+        if os.path.isfile(mainspkfile):
+            print 'miscellaneous files probably already exist, moving on, saving time'
+        else:
+            make_spkresdetclu_files(expt,res,mainresfile, mainspkfile, detcritclufilename, trivialclufilename) 
+        
+        #write_res(res,mainresfile)
+        #write_trivial_clu(res,trivialclufilename)
+        #write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
+        #                    mainspkfile,
+        #                   np.arange(len(res)))
+        #write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
         
         times = np.expand_dims(res, axis =1)
         masktimezeros = np.zeros_like(times)
@@ -268,6 +370,27 @@ def make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, KKparams)
     make_KKscript(KKparams,basefilename,KKscriptname)
     
     return basefilename
+
+@ju.func_cache
+def one_param_varyKK(hybdatadict, SDparams,prb, detectioncrit, defaultKKparams, paramtochange, listparamvalues):
+    outputdicts = []
+    for paramvalue in listparamvalues:
+        newKKparamsdict = copy.deepcopy(defaultKKparams)
+        newKKparamsdict[paramtochange] = paramvalue
+        make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, newKKparamsdict)
+        outputdicts.append(newKKparamsdict)
+    return outputdicts   
+    
+def one_param_varyKK_super(hybdatadict, SDparams,prb, detectioncrit, defaultKKparams, paramtochange, listparamvalues,supercomparams):
+    outputdicts = []
+    for paramvalue in listparamvalues:
+        newKKparamsdict = copy.deepcopy(defaultKKparams)
+        newKKparamsdict[paramtochange] = paramvalue
+        make_KKfiles_Script_supercomp(hybdatadict, SDparams,prb, detectioncrit, newKKparamsdict,supercomparams)
+        outputdicts.append(newKKparamsdict)
+    return outputdicts  
+    
+
 
 @ju.func_cache 
 def make_KKfiles_Script(hybdatadict, SDparams,prb, detectioncrit, KKparams):
@@ -337,6 +460,8 @@ def make_KKfiles_Script(hybdatadict, SDparams,prb, detectioncrit, KKparams):
     make_KKscript(KKparams,basefilename,KKscriptname)
     
     return basefilename
+
+
 
 def make_KKfiles_viewer(hybdatadict, SDparams,prb, detectioncrit, KKparams):
     

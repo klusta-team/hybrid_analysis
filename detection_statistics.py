@@ -13,6 +13,7 @@ import runspikedetekt_lib as rsd
 from spikedetekt2 import *
 from kwiklib.dataio import klustersloader
 from kwiklib.dataio import selection 
+from kwiklib.dataio import (add_clustering, open_files, close_files) #replaces add_clustering_kwik below, use kwik branch
 #from IPython import embed
 
 def read_amsk_file(fh):
@@ -110,6 +111,7 @@ def test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit):
         CauchySchwarz = hash_utils.order_dictionary({})
         detected = hash_utils.order_dictionary({})
         NumHybSpikes = creation_groundtruth.shape[0]
+        trivialmainclustering = np.zeros_like(detected_times)
         detectedgroundtruth = np.zeros_like(detected_times)
         print detectedgroundtruth.shape
         for k in np.arange(NumHybSpikes):
@@ -126,10 +128,16 @@ def test_detection_algorithm(hybdatadict, SDparams,prb, detectioncrit):
                     detected[k,j] = 0       
                 detectedgroundtruth[indices_in_timewindow[k][0][j]]= detected[k,j]
     #Store detectedgroundtruth in a clustering
-    kwikfilename = DIRPATH + hash_hyb_SD + '.kwik'
+    
     detectionhashname = hash_utils.hash_dictionary_md5(detectioncrit)
-    add_clustering_kwik(kwikfilename, detectedgroundtruth, detectionhashname)
-    #add_clustering(
+    #kwikfilename = DIRPATH + hash_hyb_SD 
+    #+ '.kwik'
+    #add_clustering_kwik(kwikfilename, detectedgroundtruth, detectionhashname)
+    kwikfiles = open_files(hash_hyb_SD,dir=DIRPATH, mode='a')
+    add_clustering(kwikfiles,name = detectionhashname, spike_clusters=detectedgroundtruth,overwrite = True )
+    print 'Added a clustering called ', detectionhashname
+    add_clustering(kwikfiles,name = 'main', spike_clusters= trivialmainclustering, overwrite = True)
+    close_files(kwikfiles)
     #clusters = '/channel_groups[0]/spikes/clusters'
     #detectionhash = hash_dictionary_md5(detectioncrit)
     #expt.createEArray(clusters, detectionhash, tb.UInt32Atom(), (0,),

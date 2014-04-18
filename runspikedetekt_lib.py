@@ -15,7 +15,7 @@ import os
 from spikedetekt2 import *
 # functions used are get_params, run
 # classes used: Experiment
-    
+from kwiklib.dataio import (add_clustering, open_files, close_files)
 #----------------------------------------------------------------------    
 
 def create_files_Experiment(filename, DIRPATH, prm, prb):
@@ -70,6 +70,10 @@ def run_spikedetekt(hybdatadict,sdparams,prb):
     # Run SpikeDetekt2
     with Experiment(hash_hyb_SD_prb, dir= DIRPATH, mode='a') as exp:
         run(raw_data,experiment=exp,prm=sdparams,probe=Probe(prb))
+   #     add_cluster(hash_hyb_SD_prb, channel_group_id='0', id='0', clustering='main',
+    #            cluster_group='0', color=None,
+    #            )
+        
     return hash_hyb_SD_prb
 
 #@ju.func_cache
@@ -85,6 +89,41 @@ def run_SD_oneparamfamily(param2vary,paramrange,defaultSDparams, hybdatadict):
     #return (all the hashes for each member of the family)
     
 
+def run_spikedetekt_debug(hybdatadict,sdparams,prb):
+    ''' Uncached version for debugging
+    This function will call hash_hyb_SD(sdparams,hybdatadict) 
+    and will run SpikeDetekt on the hybrid dataset specified by
+    hybdatadict with the parameters sd params'''
+    filename = hybdatadict['hashD']+'.kwd'
+    DIRPATH = hybdatadict['output_path']
+    
+    
+    # Make the product hash output name
+    hashSDparams = hash_utils.hash_dictionary_md5(sdparams)
+    # chose whether to include the probe, if so uncomment the two lines below
+    #hashprobe = hash_utils.hash_dictionary_md5(prb)
+    #hashdictlist = [ hybdatadict['hashD'],hashSDparams, hashprobe]
+    hashdictlist = [hybdatadict['hashD'],hashSDparams]
+    hash_hyb_SD_prb = hash_utils.make_concatenated_filename(hashdictlist)
+    outputfilename = hash_hyb_SD_prb +'.kwd'
+    
+    # Need to create a symlink from hashD.kwd to hash_hyb_SD_prb.kwd 
+    datasource = os.path.join(DIRPATH, filename )
+    dest = os.path.join(DIRPATH, outputfilename )
+    if not os.path.isfile(dest):
+        os.symlink(datasource, dest)
+    else: 
+        print 'Warning: Symbolic link ',dest  ,' already exists'
+    
+    #Read in the raw data 
+    raw_data = read_raw(dest,sdparams['nchannels'])
+    
+    create_files_Experiment(outputfilename, DIRPATH,  sdparams, prb)
+    
+    # Run SpikeDetekt2
+    with Experiment(hash_hyb_SD_prb, dir= DIRPATH, mode='a') as exp:
+        run(raw_data,experiment=exp,prm=sdparams,probe=Probe(prb))
+    return hash_hyb_SD_prb
 
 #---------------------------------------------------------------------------------------------
 if __name__== "__main__":
