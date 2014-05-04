@@ -9,7 +9,14 @@ import numpy as np
 import hybridata_creation_lib as hcl
 import runspikedetekt_lib as rsd
 import detection_statistics as ds
+import pickle
+import matplotlib.pyplot as plt
+from pyhull.convex_hull import ConvexHull
+import itertools
+
+from kwiklib.dataio import (add_clustering, open_files, close_files)
 from spikedetekt2 import *
+
 
 from sklearn import preprocessing
 from sklearn import svm, cross_validation
@@ -55,9 +62,10 @@ def scale_data(feature_data):
     return scaled_data
 
 @ju.func_cache
-def do_supervised_learning(test, train,Cval, supervised_params, scaled_fets, target,classweight):
+def do_supervised_learning(test, train,Cval, kerneltype, scaled_fets, target,classweight):
     '''Do supervised learning'''
-    clf = svm.SVC(C= Cval,kernel=supervised_params['kernel'],degree=2,coef0=1,cache_size=1000)
+    #clf = svm.SVC(C= Cval,kernel=supervised_params['kernel'],degree=2,coef0=1,cache_size=1000)
+    clf = svm.SVC(C= Cval,kernel=kerneltype,degree=2,coef0=1,cache_size=1000)
     clf.fit(scaled_fets[train],target[train],class_weight=classweight)
     preds = clf.predict(scaled_fets[test])
     preds_train= clf.predict(scaled_fets[train])
@@ -122,9 +130,9 @@ def pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_param
     #print classweights
     
     
-    return classweights,scaled_fets, target
+    return hash_hyb_SD,classweights,scaled_fets, target
     
-    
+@ju.func_cache   
 def learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params):  
     '''
      
@@ -149,9 +157,9 @@ def learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params):
     else:
         print 'Running pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params), \n you have not run it yet' 
         
-    classweights,scaled_fets, target = pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params)
+    hash_hyb_SD,classweights,scaled_fets, target = pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params)
     
-    
+    DIRPATH = hybdatadict['output_path']
     
     number_of_weights = len(classweights)
     
@@ -184,8 +192,9 @@ def learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params):
                     #trainclu_pre = np.zeros((number_of_weights,numspikes),dtype=np.int32)
         for i, (weights) in enumerate(classweights):
             for j, (train, test) in enumerate(cross_valid):
-                preds[i,j], preds_train[i,j]= do_supervised_learning(test, train,Cval, supervised_params, scaled_fets, target,classweights[i])
+                preds[i,j], preds_train[i,j]= do_supervised_learning(test, train,Cval, supervised_params['kernel'], scaled_fets, target,classweights[i])
                 
+                print 'Computed ', classweights[i]
                 #Used later to make equivalent to 4 seasons clu file
                 weights_clu_test[c,i,test,0] = preds[i,j]
                 weights_clu_test[c,i,test,1] = target[test]
@@ -200,6 +209,17 @@ def learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params):
             for k in np.arange(numspikes):
                 testclu[c,i,k] = cludict[tuple(weights_clu_test[c,i,k,:])]
                 trainclu[c,i,k] = cludict[tuple(weights_clu_train[c,i,k,:])]
+            
+#            supervisedinputdict = {'test':test, 'train':train, 'Cval': Cval, 'kernel': supervised_params['kernel'], 'scaled_fets':scaled_fets, 'target', target, 'classweights': classweigths
+            
+            
+            #Add clusterings to .kwik file
+            kwikfiles = open_files(hash_hyb_SD,dir=DIRPATH, mode='a')
+            supervisedparamshash = hash_utils.hash_dictionary_md5(supervised_params)
+            supervisedhashname = supervisedparamshash + '_' + repr(c) + '_' + repr(i) 
+            add_clustering(kwikfiles,name = supervisedhashname + 'test', spike_clusters=testclu[c,i,:] )    
+            add_clustering(kwikfiles,name = supervisedhashname + 'train', spike_clusters=trainclu[c,i,:] )     
+            close_files(kwikfiles)
                 #print 'testclu[',c,',',i,',',k,']=',testclu[c,i,k]
     
    # for c, Cval in enumerate(supervised_params['grid_C']):                    
@@ -233,7 +253,395 @@ def learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params):
    #      190 191 192 193 194 195 196 197 198 199] 
     
         
-    return classweights, testclu, trainclu
+    return supervisedparamshash, classweights, testclu, trainclu
+
+@ju.func_cache   
+def learn_data_grid_nokwik(hybdatadict, SDparams,prb,detectioncrit,supervised_params):  
+    '''
+     
+       calls learn_data() for various values of the
+       grids and also the function compute_errors()
+    
+       Writes output as clusterings labelled by Hash(svmparams) of the grid in 
+       Hash(hybdatadict)_Hash(sdparams)_Hash(detectioncrit)_Hash(supervised_params).kwik
+       using write_kwik(hybdatadict,sdparams,detectioncrit,svmparams,confusion_test,confusion_train)
+       the new .kwik format can store multiple clusterings.
+    
+       supervised_params consists of the following quantities: 
+       supervised_params = {'numfirstspikes': 200000,'kernel': 'rbf','grid_C': [1,100000,0.00001], 'grid_weights': listofweights
+       ,gammagrid : [1e-5, 0.001, 0.1, 1, 10, 1000, 100000], cross_param :  2, 
+       PCAS : 3, subvector: None}
+    '''
+    #----------------------------------------------------------
+    
+    argPLDG = [hybdatadict, SDparams,prb,detectioncrit,supervised_params]
+    if ju.is_cached(pre_learn_data_grid,*argPLDG):
+        print 'Yes, pre_learn_data_grid has been run \n'    
+    else:
+        print 'Running pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params), \n you have not run it yet' 
+        
+    hash_hyb_SD,classweights,scaled_fets, target = pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params)
+    
+    DIRPATH = hybdatadict['output_path']
+    
+    number_of_weights = len(classweights)
+    
+    numspikes = scaled_fets.shape[0]
+    cross_valid = do_cross_validation_shuffle(numspikes,supervised_params['cross_param'])
+    
+    #print cross_valid
+    
+    #do_supervised(supervised_params,
+
+    #'grid_C': [1,100000,0.00001], number_cvalues = 3
+    number_cvalues = len(supervised_params['grid_C'])
+    
+    #number_support_vectors = {}
+    weights_clu_test = np.zeros((number_cvalues,number_of_weights,numspikes,2),dtype=np.int32)
+    weights_clu_train = np.zeros((number_cvalues,number_of_weights, numspikes,2),dtype=np.int32)
+    cludict= {(0,0):1, (0,1):2, (1,0):3, (1,1):4}
+    # (prediction, groundtruth)
+    #(0,0) TN, (0,1) FN ,(1,0) FP ,(1,1) TP
+    testclu = np.zeros((number_cvalues,number_of_weights,numspikes),dtype=np.int32)
+    trainclu = np.zeros((number_cvalues,number_of_weights,numspikes),dtype=np.int32)
+    
+    
+    
+    for c, Cval in enumerate(supervised_params['grid_C']):
+        preds = {}
+        preds_train = {}
+                    ##Defined to avoid: TypeError: unhashable type: 'numpy.ndarray', something about dictionaries
+                    #testclu_pre = np.zeros((number_of_weights,numspikes),dtype=np.int32)
+                    #trainclu_pre = np.zeros((number_of_weights,numspikes),dtype=np.int32)
+        for i, (weights) in enumerate(classweights):
+            for j, (train, test) in enumerate(cross_valid):
+                preds[i,j], preds_train[i,j]= do_supervised_learning(test, train,Cval, supervised_params['kernel'], scaled_fets, target,classweights[i])
+                
+                print 'Computed ', classweights[i]
+                #Used later to make equivalent to 4 seasons clu file
+                weights_clu_test[c,i,test,0] = preds[i,j]
+                weights_clu_test[c,i,test,1] = target[test]
+                
+                
+                #Used later to make equivalent to 4 seasons clu file but for the training set
+                weights_clu_train[c,i,train,0] = preds_train[i,j]
+                weights_clu_train[c,i,train,1] = target[train]
+                
+    
+            #Make 4 seasons clu file equivalent
+            for k in np.arange(numspikes):
+                testclu[c,i,k] = cludict[tuple(weights_clu_test[c,i,k,:])]
+                trainclu[c,i,k] = cludict[tuple(weights_clu_train[c,i,k,:])]
+            
+#            supervisedinputdict = {'test':test, 'train':train, 'Cval': Cval, 'kernel': supervised_params['kernel'], 'scaled_fets':scaled_fets, 'target', target, 'classweights': classweigths
+            
+            
+            #Add clusterings to .kwik file
+            #kwikfiles = open_files(hash_hyb_SD,dir=DIRPATH, mode='a')
+            #supervisedparamshash = hash_utils.hash_dictionary_md5(supervised_params)
+            #supervisedhashname = supervisedparamshash + '_' + repr(c) + '_' + repr(i) 
+            #add_clustering(kwikfiles,name = supervisedhashname + 'test', spike_clusters=testclu[c,i,:] )    
+            #add_clustering(kwikfiles,name = supervisedhashname + 'train', spike_clusters=trainclu[c,i,:] )     
+            #close_files(kwikfiles)
+                #print 'testclu[',c,',',i,',',k,']=',testclu[c,i,k]
+    
+   # for c, Cval in enumerate(supervised_params['grid_C']):                    
+   #     kwikfilename = DIRPATH + hash_hyb_SD + '.kwik'
+   #     supervisedhashname = hash_utils.hash_dictionary_md5(detectioncrit)
+   #     add_clustering_kwik(kwikfilename, detectedgroundtruth, detectionhashname)        
+   
+      
+                
+   ####Train and test look like this for 2-fold cross validation and 200 spikes
+  
+   #         j =  0  train =  [100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117
+   #      118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135
+   #      136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+   #      154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171
+   #      172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189
+   #      190 191 192 193 194 195 196 197 198 199]  
+   #      test =  [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+   #      25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49
+   #      50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74
+   #      75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99]
+   #     j =  1  train =  [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+   #      25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49
+   #      50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74
+   #      75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99]  
+   #      test =  [100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117
+   #      118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135
+   #      136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+   #      154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171
+   #      172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189
+   #      190 191 192 193 194 195 196 197 198 199] 
+    
+        
+    return  classweights, testclu, trainclu
+
+
+
+@ju.func_cache
+def compute_errors(fourclu):
+   ''' Takes a fourseasons clufile such as testclu and trainclu 
+   as input and returns number of TN, FN, FP and TP
+     cludict= {(0,0):1, (0,1):2, (1,0):3, (1,1):4}
+    # (prediction, groundtruth)
+    #(0,0) TN, (0,1) FN ,(1,0) FP ,(1,1) TP'''
+   #fourclu has shape (number of C params, number of class weights, number of points)
+   # e.g. (3, 196, 130000)
+   TP = np.zeros(fourclu.shape[:-1])
+   # TP has shape (number of C params, number of class weights)
+   # e.g. (3, 196)
+   FN = np.zeros_like(TP)
+   FP = np.zeros_like(TP)
+   TN = np.zeros_like(TP)
+   
+   for i in np.arange(fourclu.shape[0]):
+       for j in np.arange(fourclu.shape[1]):
+           TN[i,j] = len(np.where(fourclu[i,j,:]==1)[0])
+           FN[i,j] = len(np.where(fourclu[i,j,:]==2)[0])
+           FP[i,j] = len(np.where(fourclu[i,j,:]==3)[0])
+           TP[i,j] = len(np.where(fourclu[i,j,:]==4)[0])
+   
+   return TN, FN, FP, TP
+ 
+@ju.func_cache 
+def pre_plotROC(fourclu):
+    [TN, FN, FP, TP] = compute_errors(fourclu)
+    false_discovery_rate = np.zeros_like(TP)
+    true_positive_rate = np.zeros_like(TP)
+    for i in np.arange(fourclu.shape[0]):
+       for j in np.arange(fourclu.shape[1]):
+           true_positive_rate[i,j] = TP[i,j]/(TP[i,j]+FN[i,j]) 
+           if FP[i,j] == 0:
+               false_discovery_rate[i,j] = 0
+           else:
+               false_discovery_rate[i,j] = FP[i,j]/(FP[i,j]+TP[i,j]) 
+    return false_discovery_rate, true_positive_rate     
+
+@ju.func_cache              
+def pickle_supervised_learning(tosave):
+    #tosave = [hybdatadict,ord_sdparams,ord_prb,detectioncrit,classweights3, testclu3, trainclu3,hash_hyb_SD]
+    hashdetcrit = hash_utils.hash_dictionary_md5(detectioncrit)
+    hashsupervised = hash_utils.hash_dictionary_md5(supervised_params)
+    pickleoutname = hash_hyb_SD+'_'+hashdetcrit+'_'+hashsupervised
+    pickle.dump(tosave,open('%s/%s.p'%(hybdatadict['output_path'],pickleoutname),'wb'))
+    return hashdetcrit,hashsupervised,pickleoutname        
+
+@ju.func_cache
+def do_supervised_learning_radial(test, train,Cval, kerneltype,gamma, scaled_fets, target,classweight):
+#do_supervised_learning_radial(test, train,Cval, supervised_params['kernel'],supervised_params['gamma'], scaled_fets, target,classweight)  
+    if kerneltype == 'rbf':  
+        print 'rbf kernel being used: '
+        clf = svm.SVC(C= Cval,kernel=kerneltype,gamma=gamma,cache_size=1000)
+    #clf = svm.SVC(C= Cval,kernel=kerneltype,degree=2,coef0=1,cache_size=1000)
+        clf.fit(scaled_fets[train],target[train],class_weight=classweight)
+        preds = clf.predict(scaled_fets[test])
+        preds_train= clf.predict(scaled_fets[train])
+    else: 
+        print 'WARNING: Kernel not radial!'    
+    return preds,preds_train
+
+
+@ju.func_cache   
+def learn_data_grid_general(hybdatadict, SDparams,prb,detectioncrit,supervised_params,addtokwik):  
+    '''
+       If addtokwik == True, then the clusterings are also stored in the .kwik file
+       
+       
+            
+       calls learn_data() for various values of the
+       grids and also the function compute_errors()
+    
+       Writes output as clusterings labelled by Hash(svmparams) of the grid in 
+       Hash(hybdatadict)_Hash(sdparams)_Hash(detectioncrit)_Hash(supervised_params).kwik
+       using write_kwik(hybdatadict,sdparams,detectioncrit,svmparams,confusion_test,confusion_train)
+       the new .kwik format can store multiple clusterings.
+    
+       supervised_params consists of the following quantities: 
+       supervised_params = {'numfirstspikes': 200000,'kernel': 'rbf','grid_C': [1,100000,0.00001], 'grid_weights': listofweights
+       ,gammagrid : [1e-5, 0.001, 0.1, 1, 10, 1000, 100000], cross_param :  2, 
+       PCAS : 3, subvector: None}
+    '''
+    #----------------------------------------------------------
+    
+    argPLDG = [hybdatadict, SDparams,prb,detectioncrit,supervised_params]
+    if ju.is_cached(pre_learn_data_grid,*argPLDG):
+        print 'Yes, pre_learn_data_grid has been run \n'    
+    else:
+        print 'Running pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params), \n you have not run it yet' 
+        
+    hash_hyb_SD,classweights,scaled_fets, target = pre_learn_data_grid(hybdatadict, SDparams,prb,detectioncrit,supervised_params)
+    
+    DIRPATH = hybdatadict['output_path']
+    
+    number_of_weights = len(classweights)
+    
+    numspikes = scaled_fets.shape[0]
+    cross_valid = do_cross_validation_shuffle(numspikes,supervised_params['cross_param'])
+    
+    #print cross_valid
+    
+    #do_supervised(supervised_params,
+
+    #'grid_C': [1,100000,0.00001], number_cvalues = 3
+    number_cvalues = len(supervised_params['grid_C'])
+    
+    #number_support_vectors = {}
+    weights_clu_test = np.zeros((number_cvalues,number_of_weights,numspikes,2),dtype=np.int32)
+    weights_clu_train = np.zeros((number_cvalues,number_of_weights, numspikes,2),dtype=np.int32)
+    cludict= {(0,0):1, (0,1):2, (1,0):3, (1,1):4}
+    # (prediction, groundtruth)
+    #(0,0) TN, (0,1) FN ,(1,0) FP ,(1,1) TP
+    testclu = np.zeros((number_cvalues,number_of_weights,numspikes),dtype=np.int32)
+    trainclu = np.zeros((number_cvalues,number_of_weights,numspikes),dtype=np.int32)
+    
+    
+    
+    for c, Cval in enumerate(supervised_params['grid_C']):
+        preds = {}
+        preds_train = {}
+                    ##Defined to avoid: TypeError: unhashable type: 'numpy.ndarray', something about dictionaries
+                    #testclu_pre = np.zeros((number_of_weights,numspikes),dtype=np.int32)
+                    #trainclu_pre = np.zeros((number_of_weights,numspikes),dtype=np.int32)
+        for i, (weights) in enumerate(classweights):
+            for j, (train, test) in enumerate(cross_valid):
+                if supervised_params['kernel'] == 'poly':
+                    preds[i,j], preds_train[i,j]= do_supervised_learning(test, train,Cval, supervised_params['kernel'], scaled_fets, target,classweights[i])
+                else:#radial kernel, only allow a single gamma value at a time
+                    preds[i,j], preds_train[i,j]= do_supervised_learning_radial(test, train,Cval, supervised_params['kernel'],supervised_params['gamma'], scaled_fets, target,classweights[i])    
+                
+                
+                
+                print 'Computed ', classweights[i]
+                #Used later to make equivalent to 4 seasons clu file
+                weights_clu_test[c,i,test,0] = preds[i,j]
+                weights_clu_test[c,i,test,1] = target[test]
+                
+                
+                #Used later to make equivalent to 4 seasons clu file but for the training set
+                weights_clu_train[c,i,train,0] = preds_train[i,j]
+                weights_clu_train[c,i,train,1] = target[train]
+                
+    
+            #Make 4 seasons clu file equivalent
+            for k in np.arange(numspikes):
+                testclu[c,i,k] = cludict[tuple(weights_clu_test[c,i,k,:])]
+                trainclu[c,i,k] = cludict[tuple(weights_clu_train[c,i,k,:])]
+            
+#            supervisedinputdict = {'test':test, 'train':train, 'Cval': Cval, 'kernel': supervised_params['kernel'], 'scaled_fets':scaled_fets, 'target', target, 'classweights': classweigths
+            
+            
+            #Add clusterings to .kwik file
+            supervisedparamshash = None #if addtokwik = False otherwise crashes
+            if addtokwik:
+                kwikfiles = open_files(hash_hyb_SD,dir=DIRPATH, mode='a')
+                supervisedparamshash = hash_utils.hash_dictionary_md5(supervised_params)
+                supervisedhashname = supervisedparamshash + '_' + repr(c) + '_' + repr(i) 
+                add_clustering(kwikfiles,name = supervisedhashname + 'test', spike_clusters=testclu[c,i,:] )    
+                add_clustering(kwikfiles,name = supervisedhashname + 'train', spike_clusters=trainclu[c,i,:] )     
+                close_files(kwikfiles)
+                #print 'testclu[',c,',',i,',',k,']=',testclu[c,i,k]
+    
+   # for c, Cval in enumerate(supervised_params['grid_C']):                    
+   #     kwikfilename = DIRPATH + hash_hyb_SD + '.kwik'
+   #     supervisedhashname = hash_utils.hash_dictionary_md5(detectioncrit)
+   #     add_clustering_kwik(kwikfilename, detectedgroundtruth, detectionhashname)        
+   
+      
+                
+   ####Train and test look like this for 2-fold cross validation and 200 spikes
+  
+   #         j =  0  train =  [100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117
+   #      118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135
+   #      136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+   #      154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171
+   #      172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189
+   #      190 191 192 193 194 195 196 197 198 199]  
+   #      test =  [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+   #      25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49
+   #      50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74
+   #      75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99]
+   #     j =  1  train =  [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+   #      25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49
+   #      50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74
+   #      75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99]  
+   #      test =  [100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117
+   #      118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135
+   #      136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+   #      154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171
+   #      172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189
+   #      190 191 192 193 194 195 196 197 198 199] 
+    
+        
+    return supervisedparamshash, classweights, testclu, trainclu
+
+
+#do_supervised_learning_general is Not used - might have been a good idea! 
+def do_supervised_learning_general(test, train,Cval, kerneltype, scaled_fets, target,classweight):
+
+    if kerneltype == 'poly':
+        do_supervised_learning(test, train,Cval, kerneltype, scaled_fets, target,classweight)
+    else:
+        do_supervised_learning_radial()    
+
+def dist_from_perfection(error_rates):
+    '''error_rates = pre_plotROC(testclu0)
+       error_rates[0].shape =  (1, 196) = (1, num_classweights) False discovery rates
+       error_rates[1].shape =  (1, 196) = (1, num_classweights) True positive rates
+    
+    returns Euclidean distance from the point [0,1] (Perfection)
+    '''
+    #error =     
+    pass
+          
+def plotROC(graphpath,fourclu):
+    false_discovery_rate, true_positive_rate = pre_plotROC(fourclu)          
+    
+    fig1 = plt.figure(1)
+    axes1 = fig1.add_axes([0.1,0.1,0.8,0.8]) 
+    #Area on page not axes
+    #dreadful notation, but we are stuck with it!
+    axes1.hold(True)
+    colours = ['r', 'g', 'b']
+    axes1.set_xlim([0,1])
+    axes1.set_ylim([0,1])
+    #plt.xlim([0,1]) 
+    #plt.ylim([0,1])
+    axes1.set_xlabel('False discovery rate')
+    axes1.set_ylabel('True positive rate')
+    fig1.suptitle(' %s  '%(graphpath), fontsize=14, fontweight='bold')
+    for i in np.arange(fourclu.shape[0]):
+        axes1.scatter(false_discovery_rate[i,:],true_positive_rate[i,:],marker = 'x', color = colours[np.mod(i,len(colours))])   
+        ratepoints = zip(false_discovery_rate[i,:],true_positive_rate[i,:])
+        hull = ConvexHull(ratepoints)
+        #simplexlist = [simplex for simplex in hull.simplices]
+        #print simplexlist
+        for simplex in hull.simplices:
+            for data in itertools.combinations(simplex.coords,2):
+                data = np.array(data)
+                print data
+                print 'next!'
+                axes1.plot(data[:,0],data[:,1],color = colours[np.mod(i,len(colours))])
+            #print vertex_index
+            #xes = ratepoints[vertex_index,0]
+            #print xes
+            #yes = ratepoints[vertex_index,1]
+            #axes1.plot(ratepoints[vertex_index,0],ratepoints[vertex_index,1],'k-')
+    #plt.show()
+    #plt.savefig('%s_%g.pdf'%(graphpath,i))    
+    plt.show()
+    fig1.savefig('%s.pdf'%(graphpath))      
+    #plt.figure(2)
+    
+    #fig2 = plt.figure(2)
+    #axes2 = fig2.add_axes([0.1,0.1,0.8,0.8]) 
+    
+    #return ratepoints
+    #return xes, yes, 
+    return hull, ratepoints, false_discovery_rate, true_positive_rate        
+
+
 
 # <codecell>
 

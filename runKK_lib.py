@@ -157,7 +157,7 @@ def make_spkresdetclu_files(expt,res,mainresfile, mainspkfile, detcritclufilenam
     write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
                             mainspkfile,
                            np.arange(len(res)))
-    write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
+    #write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
 
 
 def make_KKscript_supercomp(KKparams, filebase,scriptname,supercomparams):
@@ -374,21 +374,25 @@ def make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, KKparams)
 @ju.func_cache
 def one_param_varyKK(hybdatadict, SDparams,prb, detectioncrit, defaultKKparams, paramtochange, listparamvalues):
     outputdicts = []
+    listbasefiles = []
     for paramvalue in listparamvalues:
         newKKparamsdict = copy.deepcopy(defaultKKparams)
         newKKparamsdict[paramtochange] = paramvalue
-        make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, newKKparamsdict)
+        basefile = make_KKfiles_Script_full(hybdatadict, SDparams,prb, detectioncrit, newKKparamsdict)
         outputdicts.append(newKKparamsdict)
-    return outputdicts   
+        listbasefiles.append(basefile)
+    return listbasefiles, outputdicts   
     
 def one_param_varyKK_super(hybdatadict, SDparams,prb, detectioncrit, defaultKKparams, paramtochange, listparamvalues,supercomparams):
     outputdicts = []
+    listbasefiles = []
     for paramvalue in listparamvalues:
         newKKparamsdict = copy.deepcopy(defaultKKparams)
         newKKparamsdict[paramtochange] = paramvalue
-        make_KKfiles_Script_supercomp(hybdatadict, SDparams,prb, detectioncrit, newKKparamsdict,supercomparams)
+        basefile = make_KKfiles_Script_supercomp(hybdatadict, SDparams,prb, detectioncrit, newKKparamsdict,supercomparams)
         outputdicts.append(newKKparamsdict)
-    return outputdicts  
+        listbasefiles.append(basefile)
+    return listbasefiles, outputdicts  
     
 
 
@@ -461,6 +465,172 @@ def make_KKfiles_Script(hybdatadict, SDparams,prb, detectioncrit, KKparams):
     
     return basefilename
 
+def make_detcritclu_file(detcrit_groundtruth, detcritclufilename):
+    write_clu(detcrit_groundtruth, detcritclufilename)
+
+def make_spkresclu_files(expt,res,mainresfile, mainspkfile, trivialclufilename):
+    write_res(res,mainresfile)
+    write_trivial_clu(res,trivialclufilename)
+    write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
+                            mainspkfile,
+                           np.arange(len(res)))
+    #write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
+
+
+@ju.func_cache
+def make_KKfiles_Script_detindep_full(hybdatadict, SDparams,prb, KKparams):
+    '''Creates the files required to run KlustaKwik'''
+    argSD = [hybdatadict,SDparams,prb]
+    if ju.is_cached(rsd.run_spikedetekt,*argSD):
+        print 'Yes, SD has been run \n'
+        hash_hyb_SD = rsd.run_spikedetekt(hybdatadict,SDparams,prb)
+    else:
+        print 'You need to run Spikedetekt before attempting to analyse results ' 
+   
+    KKhash = hash_utils.hash_dictionary_md5(KKparams)
+    baselist = [hash_hyb_SD, KKhash]
+    KKbasefilename =  hash_utils.make_concatenated_filename(baselist)
+    
+    mainbasefilename = hash_hyb_SD
+    
+    DIRPATH = hybdatadict['output_path']
+    os.chdir(DIRPATH)
+    
+    mainresfile = DIRPATH + mainbasefilename + '.res.1' 
+    mainspkfile = DIRPATH + mainbasefilename + '.spk.1'        
+    trivialclufilename = DIRPATH + mainbasefilename + '.clu.1'
+    mainfetfile = DIRPATH + mainbasefilename+'.fet.1'
+    mainfmaskfile = DIRPATH + mainbasefilename+'.fmask.1'
+    mainmaskfile = DIRPATH + mainbasefilename+'.mask.1'
+    
+    #arg_spkresdetclu = [expt,res,mainresfile, mainspkfile, detcritclufilename, trivialclufilename]
+        #if ju.is_cached(make_spkresdetclu_files,*arg_spkresdetclu):
+    if os.path.isfile(mainspkfile):
+            print 'miscellaneous files probably already exist, moving on, saving time'
+    else:
+        with Experiment(hash_hyb_SD, dir= DIRPATH, mode='r') as expt:
+            if KKparams['numspikesKK'] is not None: 
+                feats = expt.channel_groups[0].spikes.features[0:KKparams['numspikesKK']]
+                prefmasks = expt.channel_groups[0].spikes.features_masks[0:KKparams['numspikesKK'],:,1]
+                
+                premasks = expt.channel_groups[0].spikes.masks[0:KKparams['numspikesKK']]
+                res = expt.channel_groups[0].spikes.time_samples[0:KKparams['numspikesKK']]
+            else: 
+                feats = expt.channel_groups[0].spikes.features[:]
+                prefmasks = expt.channel_groups[0].spikes.features_masks[:,:,1]
+                #print fmasks[3,:]
+                premasks = expt.channel_groups[0].spikes.masks[:]
+                res = expt.channel_groups[0].spikes.time_samples[:]    
+                
+            
+            
+            #arg_spkresdetclu = [expt,res,mainresfile, mainspkfile, detcritclufilename, trivialclufilename]
+            #if ju.is_cached(make_spkresdetclu_files,*arg_spkresdetclu):
+            #if os.path.isfile(mainspkfile):
+            #    print 'miscellaneous files probably already exist, moving on, saving time'
+            #else:
+                make_spkresclu_files(expt,res,mainresfile, mainspkfile, trivialclufilename) 
+            
+            #write_res(res,mainresfile)
+            #write_trivial_clu(res,trivialclufilename)
+            #write_spk_buffered(expt.channel_groups[0].spikes.waveforms_filtered,
+            #                    mainspkfile,
+            #                   np.arange(len(res)))
+            #write_clu(detcrit_groundtruth['detected_groundtruth'], detcritclufilename)
+            
+            times = np.expand_dims(res, axis =1)
+            masktimezeros = np.zeros_like(times)
+            fets = np.concatenate((feats, times),axis = 1)
+            fmasks = np.concatenate((prefmasks, masktimezeros),axis = 1)
+            masks = np.concatenate((premasks, masktimezeros),axis = 1)
+       
+        #print fets
+        #embed()
+        
+        if not os.path.isfile(mainfetfile):
+            write_fet(fets,mainfetfile )
+        else: 
+            print mainfetfile, ' already exists, moving on \n '
+            
+        if not os.path.isfile(mainfmaskfile):
+            write_mask(fmasks,mainfmaskfile,fmt='%f')
+        else: 
+            print mainfmaskfile, ' already exists, moving on \n '  
+        
+        if not os.path.isfile(mainmaskfile):
+            write_mask(masks,mainmaskfile,fmt='%f')
+        else: 
+            print mainmaskfile, ' already exists, moving on \n '    
+        
+    
+    mainxmlfile =  hybdatadict['donor_path'] + hybdatadict['donor']+'_afterprocessing.xml'   
+    os.system('ln -s %s %s.fet.1 ' %(mainfetfile,KKbasefilename))
+    os.system('ln -s %s %s.fmask.1 ' %(mainfmaskfile,KKbasefilename))
+    os.system('ln -s %s %s.mask.1 ' %(mainmaskfile,KKbasefilename))
+    os.system('ln -s %s %s.trivial.clu.1 ' %(trivialclufilename,KKbasefilename))
+    os.system('ln -s %s %s.spk.1 ' %(mainspkfile,KKbasefilename))
+    os.system('ln -s %s %s.res.1 ' %(mainresfile,KKbasefilename))
+    os.system('cp %s %s.xml ' %(mainxmlfile,mainbasefilename))
+    os.system('cp %s %s.xml ' %(mainxmlfile,KKbasefilename))
+    
+    KKscriptname = KKbasefilename
+    make_KKscript(KKparams,KKbasefilename,KKscriptname)
+    
+    return KKbasefilename
+
+@ju.func_cache
+def one_param_varyKK_ind(hybdatadict, SDparams,prb, defaultKKparams, paramtochange, listparamvalues):
+    outputdicts = []
+    listbasefiles = []
+    for paramvalue in listparamvalues:
+        newKKparamsdict = copy.deepcopy(defaultKKparams)
+        newKKparamsdict[paramtochange] = paramvalue
+        KKbasefile = make_KKfiles_Script_detindep_full(hybdatadict, SDparams,prb, newKKparamsdict)
+        outputdicts.append(newKKparamsdict)
+        listbasefiles.append(KKbasefile)
+    return listbasefiles, outputdicts   
+
+def make_KKfiles_Script_detindep_supercomp(hybdatadict, SDparams,prb, KKparams,supercomparams):
+    '''Creates the files required to run KlustaKwik'''
+    argSD = [hybdatadict,SDparams,prb]
+    if ju.is_cached(rsd.run_spikedetekt,*argSD):
+        print 'Yes, SD has been run \n'
+        hash_hyb_SD = rsd.run_spikedetekt(hybdatadict,SDparams,prb)
+    else:
+        print 'You need to run Spikedetekt before attempting to analyse results ' 
+    
+
+    KKhash = hash_utils.hash_dictionary_md5(KKparams)
+    baselist = [hash_hyb_SD, KKhash]
+    KKbasefilename =  hash_utils.make_concatenated_filename(baselist)
+    
+    mainbasefilename = hash_hyb_SD
+    
+    DIRPATH = hybdatadict['output_path']
+    os.chdir(DIRPATH)
+    
+    KKscriptname = KKbasefilename
+    make_KKscript_supercomp(KKparams,KKbasefilename,KKscriptname,supercomparams)
+    
+    return KKbasefilename
+
+    
+def one_param_varyKK_super_ind(hybdatadict, SDparams,prb, defaultKKparams, paramtochange, listparamvalues,supercomparams):
+    outputdicts = []
+    listbasefiles = []
+    for paramvalue in listparamvalues:
+        newKKparamsdict = copy.deepcopy(defaultKKparams)
+        newKKparamsdict[paramtochange] = paramvalue
+        KKbasefile = make_KKfiles_Script_detindep_supercomp(hybdatadict, SDparams,prb, newKKparamsdict,supercomparams)
+        outputdicts.append(newKKparamsdict)
+        listbasefiles.append(KKbasefile)
+    return listbasefiles, outputdicts  
+
+def make_results_detcrit_indep(masterdir, listoldbasefiles,listnewbasefiles):
+    numbKK = len(listoldbasefiles)
+    for k in np.arange(numbKK):
+        os.system('cp %s/%s.klg.1 %s/%s.klg.1'%(masterdir,listoldbasefiles[k],masterdir,listnewbasefiles[k]))
+        os.system('cp %s/%s.clu.1 %s/%s.clu.1'%(masterdir,listoldbasefiles[k],masterdir,listnewbasefiles[k]))
 
 
 def make_KKfiles_viewer(hybdatadict, SDparams,prb, detectioncrit, KKparams):
@@ -535,7 +705,7 @@ def make_KKfiles_viewer(hybdatadict, SDparams,prb, detectioncrit, KKparams):
         #          filepath = basename+'.xml')
     mainxmlfile =  hybdatadict['donor_path'] + hybdatadict['donor']+'_afterprocessing.xml'   
     
-    os.system('ln -s %s %s.clu.1 ' %(trivialclufilename,basefilename))
+    #os.system('ln -s %s %s.clu.1 ' %(trivialclufilename,basefilename))
     os.system('ln -s %s %s.spk.1 ' %(mainspkfile,basefilename))
     os.system('ln -s %s %s.res.1 ' %(mainresfile,basefilename))
     os.system('cp %s %s.xml ' %(mainxmlfile,basefilename))

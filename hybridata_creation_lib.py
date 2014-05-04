@@ -12,7 +12,7 @@ import collections as col
 import tables as tb
 import time_series_utils as tsu
 from spikedetekt2.dataio import (DatRawDataReader, create_kwd, convert_dat_to_kwd, add_recording_in_kwd,read_raw)
-from kwiklib.dataio.tools import (load_binary, normalize)
+from kwiklib.dataio.tools import load_binary
 from kwiklib.dataio import klustersloader
 from scipy.interpolate import interp1d
 
@@ -356,7 +356,7 @@ def create_hybrid_kwdfile(hybdatadict):
     create_kwd_from_dat(kwdoutputname,acceptordat,prm)
     #tb.close(kwdoutputname)
     with tb.openFile(kwdoutputname, mode = 'a') as kwdfile:
-        kwdfile = tb.openFile(kwdoutputname, mode = 'a')
+        #kwdfile = tb.openFile(kwdoutputname, mode = 'a')
         rawdata = kwdfile.root.recordings._f_getChild('0').data
         #rawdata.shape = (Number of samples, nChannels)
         
@@ -410,23 +410,7 @@ def create_hybrid_kwdfile(hybdatadict):
     creation_groundtruth = donorspike_timeseries 
     return hamspike, kwdoutputname, creation_groundtruth, amplitude
 
-def plot_spike(graphpath,avehamspike,ifshow):
-    fig1 = plt.figure(1)
-    axes1 = fig1.add_axes([0.1,0.1,0.8,0.8])
-    axes1.set_xlabel('Samples')
-    #axes1.set_ylabel('')
 
-    numchans = avehamspike.shape[1]
-    axes1.hold(True)
-    const = 500
-    for chan in np.arange(numchans):
-        #axis = plt.subplot(hybdatadict['numchannels'],1,i+1)
-        axes1.plot(avehamspike[:,chan]+const*chan)
-    
-    if ifshow ==True:
-        plt.show()
-    fig1.savefig('%s.pdf'%(graphpath))
-    return
 
 
 # Obsolete function below    
