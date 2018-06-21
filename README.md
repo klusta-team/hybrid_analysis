@@ -3,7 +3,7 @@ Hybrid analysis for spike sorting
 NOTICE:
 We provide a dataset with ground truth against which any spike sorting algorithm can be tested (e.g. masked KlustaKwik) can be downloaded from here:
 
-[NCHybrid136](https://googledrive.com/host/0BwTrbfNJNihcWWpKeHpaYUJmWjg)
+[NCHybrid136](https://drive.google.com/open?id=0BwTrbfNJNihcWWpKeHpaYUJmWjg)
 
 The files are in the kwik format.
 
